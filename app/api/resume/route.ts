@@ -6,9 +6,10 @@ const groq = new Groq({
 });
 
 export async function POST(req: NextRequest) {
-  const { name, email, phone, role, skills, education, projects, experience } = await req.json();
+  try {
+    const { name, email, phone, role, skills, education, projects, experience } = await req.json();
 
-  const prompt = `Create a professional resume for a fresher with the following details:
+    const prompt = `Create a professional resume for a fresher with the following details:
 
 Name: ${name}
 Email: ${email}
@@ -29,13 +30,17 @@ Format it as a clean, professional resume with proper sections:
 
 Make it ATS friendly and impressive. Use plain text formatting with clear section headers.`;
 
-  const response = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 1000,
-  });
+    const response = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1000,
+    });
 
-  return NextResponse.json({
-    result: response.choices[0].message.content,
-  });
+    return NextResponse.json({
+      result: response.choices[0].message.content,
+    });
+  } catch (error: any) {
+    console.error("Groq error:", error.message);
+    return NextResponse.json({ result: "Error: " + error.message }, { status: 500 });
+  }
 }
