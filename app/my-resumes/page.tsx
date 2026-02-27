@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import jsPDF from "jspdf";
 
 export default function MyResumes() {
   const [resumes, setResumes] = useState<any[]>([]);
@@ -31,6 +32,34 @@ export default function MyResumes() {
     await supabase.from("resumes").delete().eq("id", id);
     setResumes(resumes.filter((r) => r.id !== id));
     if (selected?.id === id) setSelected(null);
+  };
+
+  const downloadPDF = (resume: any) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - margin * 2;
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(resume.name, margin, 20);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+
+    const lines = doc.splitTextToSize(resume.content, maxWidth);
+    let y = 35;
+
+    lines.forEach((line: string) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, margin, y);
+      y += 6;
+    });
+
+    doc.save(`${resume.name}.pdf`);
   };
 
   return (
@@ -82,12 +111,20 @@ export default function MyResumes() {
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="font-bold text-blue-400">{selected.name}</h2>
-                    <button
-                      onClick={() => deleteResume(selected.id)}
-                      className="text-red-400 hover:text-red-300 text-sm border border-red-900 px-3 py-1 rounded-lg"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => downloadPDF(selected)}
+                        className="text-green-400 hover:text-green-300 text-sm border border-green-900 px-3 py-1 rounded-lg"
+                      >
+                        ⬇ Download PDF
+                      </button>
+                      <button
+                        onClick={() => deleteResume(selected.id)}
+                        className="text-red-400 hover:text-red-300 text-sm border border-red-900 px-3 py-1 rounded-lg"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                   <pre className="whitespace-pre-wrap text-gray-200 text-sm leading-relaxed">{selected.content}</pre>
                 </div>
