@@ -1,24 +1,30 @@
 import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: NextRequest) {
-  const { role, question, answer } = await req.json();
+  const { role, messages } = await req.json();
 
-  const prompt = answer
-    ? `You are an expert interview coach. The candidate is applying for a ${role} position.
-       Question asked: "${question}"
-       Candidate's answer: "${answer}"
-       Give constructive feedback on their answer in 3-4 sentences. Be encouraging but honest.`
-    : `You are an expert interview coach. Generate 1 interview question for a ${role} position fresher.
-       Just give the question directly, nothing else.`;
+  const systemPrompt = `You are a strict, professional interviewer conducting a real job interview for a ${role} position. 
+
+Your behavior:
+- Ask one focused interview question at a time
+- After the candidate answers, respond like a real interviewer — acknowledge briefly, then either ask a follow-up or move to the next topic
+- Be direct, formal and professional. No excessive praise.
+- Probe deeper if the answer is vague or incomplete
+- After 5-6 exchanges, wrap up the interview professionally
+- Never break character. You are the interviewer, not an AI assistant.
+- Keep your responses concise — max 3 sentences then your next question.
+
+Start by greeting the candidate formally and asking your first question.`;
 
   const response = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...messages,
+    ],
     max_tokens: 300,
   });
 
