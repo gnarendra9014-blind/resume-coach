@@ -52,6 +52,7 @@ export default function ResumeBuilder() {
   const [clPreviewUrl, setClPreviewUrl] = useState<string | null>(null);
 
   // LinkedIn Optimizer States
+  const [linkedInUrl, setLinkedInUrl] = useState("");
   const [linkedInText, setLinkedInText] = useState<string | null>(null);
   const [generatingLinkedIn, setGeneratingLinkedIn] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +212,7 @@ export default function ResumeBuilder() {
       const res = await fetch("/api/linkedin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume: result, role: form.role }),
+        body: JSON.stringify({ resume: result, role: form.role, linkedinUrl: linkedInUrl }),
       });
       const data = await res.json();
       setLinkedInText(data.linkedInOptimized);
@@ -659,14 +660,32 @@ export default function ResumeBuilder() {
                     </button></MagneticButton>
                   )}
                   {!linkedInText && (
-                    <MagneticButton><button onClick={handleGenerateLinkedIn} disabled={generatingLinkedIn} style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "16px 16px", background: "rgba(10, 102, 194, 0.05)", border: "1px solid rgba(10, 102, 194, 0.2)",
-                      borderRadius: 10, color: "white", fontSize: 13, width: "100%", cursor: "pointer", transition: "all 0.2s"
+                    <div style={{
+                      display: "flex", flexDirection: "column", gap: 8,
+                      padding: "16px", background: "rgba(10, 102, 194, 0.05)", border: "1px solid rgba(10, 102, 194, 0.2)",
+                      borderRadius: 10
                     }}>
-                      <span>{generatingLinkedIn ? "Optimizing..." : "LinkedIn Optimizer"}</span>
-                      {generatingLinkedIn ? <span style={{ animation: "pulse 1s infinite" }}>⏳</span> : <span>→</span>}
-                    </button></MagneticButton>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>LinkedIn Audit</div>
+                      <input 
+                        type="url" 
+                        placeholder="Paste your LinkedIn URL (optional)" 
+                        value={linkedInUrl}
+                        onChange={(e) => setLinkedInUrl(e.target.value)}
+                        style={{
+                          width: "100%", padding: "10px", background: "rgba(0,0,0,0.3)",
+                          border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6,
+                          color: "white", fontSize: 13, outline: "none"
+                        }}
+                      />
+                      <MagneticButton><button onClick={handleGenerateLinkedIn} disabled={generatingLinkedIn} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "10px", background: "rgba(10, 102, 194, 0.2)", border: "none",
+                        borderRadius: 6, color: "white", fontSize: 13, width: "100%", cursor: "pointer", transition: "all 0.2s", marginTop: 4
+                      }}>
+                        <span>{generatingLinkedIn ? "Auditing Profile..." : "Analyze Profile"}</span>
+                        {generatingLinkedIn ? <span style={{ animation: "pulse 1s infinite" }}>⏳</span> : <span>→</span>}
+                      </button></MagneticButton>
+                    </div>
                   )}
                   <Link href="/interview" style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
