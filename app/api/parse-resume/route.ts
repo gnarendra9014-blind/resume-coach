@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
-// @ts-ignore
-import pdfParse from "pdf-parse";
+// Removed static pdfParse require to fix Vercel static compilation
 
 // Using the same Groq client configuration that your app currently uses
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -21,6 +20,8 @@ export async function POST(req: NextRequest) {
     if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      
+      const pdfParse = require("pdf-parse");
       const data = await pdfParse(buffer);
       text = data.text;
     } else if (file.type === "text/plain" || file.name.endsWith(".txt")) {

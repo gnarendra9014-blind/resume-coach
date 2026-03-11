@@ -1,0 +1,34 @@
+
+> resume-coach@0.1.0 build
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.8s
+  Running TypeScript ...
+  Collecting page data using 7 workers ...
+
+Warning: Cannot load "@napi-rs/canvas" package: "Error: Cannot find module '@napi-rs/canvas'
+Require stack:
+- C:\ROOT\node_modules\pdf-parse\dist\pdf-parse\cjs\index.cjs".
+Warning: Cannot polyfill `DOMMatrix`, rendering may be broken.
+Warning: Cannot polyfill `ImageData`, rendering may be broken.
+Warning: Cannot polyfill `Path2D`, rendering may be broken.
+ReferenceError: DOMMatrix is not defined
+    at instantiateModule (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[turbopack]_runtime.js:740:9)
+    at getOrInstantiateModuleFromParent (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[turbopack]_runtime.js:763:12)
+    at Context.commonJsRequire [as r] (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[turbopack]_runtime.js:249:12)
+    at module evaluation (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[root-of-the-server]__4dff8214._.js:1:1465)
+    at instantiateModule (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[turbopack]_runtime.js:740:9)
+    at instantiateRuntimeModule (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[turbopack]_runtime.js:768:12)
+    at getOrInstantiateRuntimeModule (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[turbopack]_runtime.js:781:12)
+    at Object.m (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\chunks\[turbopack]_runtime.js:790:18)
+    at Object.<anonymous> (C:\Users\nanin\OneDrive\Desktop\resume-coach\.next\server\app\api\parse-resume\route.js:8:3)
+
+> Build error occurred
+Error: Failed to collect page data for /api/parse-resume
+    at ignore-listed frames {
+  type: 'Error'
+}

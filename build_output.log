@@ -1,0 +1,27 @@
+
+> resume-coach@0.1.0 build
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 errors:
+./app/api/parse-resume/route.ts:4:1
+Export default doesn't exist in target module
+[0m [90m 2 |[39m [36mimport[39m [33mGroq[39m [36mfrom[39m [32m"groq-sdk"[39m[33m;[39m
+ [90m 3 |[39m [90m// @ts-ignore[39m
+[31m[1m>[22m[39m[90m 4 |[39m [36mimport[39m pdfParse [36mfrom[39m [32m"pdf-parse"[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [90m// Using the same Groq client configuration that your app currently uses[39m
+ [90m 7 |[39m [36mconst[39m groq [33m=[39m [36mnew[39m [33mGroq[39m({ apiKey[33m:[39m process[33m.[39menv[33m.[39m[33mGROQ_API_KEY[39m })[33m;[39m[0m
+
+The export default was not found in module [project]/node_modules/pdf-parse/dist/pdf-parse/esm/index.js [app-route] (ecmascript).
+Did you mean to import Rectangle?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+
+    at <unknown> (./app/api/parse-resume/route.ts:4:1)
