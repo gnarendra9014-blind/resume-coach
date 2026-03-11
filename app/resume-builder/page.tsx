@@ -50,6 +50,10 @@ export default function ResumeBuilder() {
   const [coverLetter, setCoverLetter] = useState<string | null>(null);
   const [generatingCL, setGeneratingCL] = useState(false);
   const [clPreviewUrl, setClPreviewUrl] = useState<string | null>(null);
+
+  // LinkedIn Optimizer States
+  const [linkedInText, setLinkedInText] = useState<string | null>(null);
+  const [generatingLinkedIn, setGeneratingLinkedIn] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   useReveal();
 
@@ -198,6 +202,23 @@ export default function ResumeBuilder() {
       alert("Failed to generate Cover Letter.");
     }
     setGeneratingCL(false);
+  };
+
+  const handleGenerateLinkedIn = async () => {
+    if (!result) return;
+    setGeneratingLinkedIn(true);
+    try {
+      const res = await fetch("/api/linkedin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume: result, role: form.role }),
+      });
+      const data = await res.json();
+      setLinkedInText(data.linkedInOptimized);
+    } catch {
+      alert("Failed to generate LinkedIn Optimization.");
+    }
+    setGeneratingLinkedIn(false);
   };
 
   const checklist = [
@@ -565,6 +586,22 @@ export default function ResumeBuilder() {
                   </div>
                 </div>
               )}
+
+              {/* LINKEDIN OPTIMIZATION SECTION */}
+              {linkedInText && (
+                <div style={{ marginTop: 40 }}>
+                  <div className="section-label" style={{ marginBottom: 24 }}>LinkedIn Optimizer Results</div>
+                  <div className="glass-panel" style={{
+                    borderRadius: 16, padding: "24px",
+                    background: "rgba(10, 102, 194, 0.05)",
+                    border: "1px solid rgba(10, 102, 194, 0.2)"
+                  }}>
+                    <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.8, color: "rgba(255,255,255,0.8)" }}>
+                      {linkedInText}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Sidebar */}
@@ -621,22 +658,27 @@ export default function ResumeBuilder() {
                       {generatingCL ? <span style={{ animation: "pulse 1s infinite" }}>⏳</span> : <span>→</span>}
                     </button></MagneticButton>
                   )}
-                  {[
-                    ["Practice Interview", "/interview"],
-                    ["LinkedIn Optimizer", "#"],
-                  ].map(([label, href]) => (
-                    <Link key={label} href={href} style={{
+                  {!linkedInText && (
+                    <MagneticButton><button onClick={handleGenerateLinkedIn} disabled={generatingLinkedIn} style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "12px 16px", border: "1px solid rgba(255,255,255,0.06)",
-                      borderRadius: 10, textDecoration: "none", color: "rgba(255,255,255,0.5)",
-                      fontSize: 13, transition: "all 0.2s",
-                    }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.2)"; (e.currentTarget as HTMLAnchorElement).style.color = "white"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.06)"; (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.5)"; }}
-                    >
-                      <span>{label}</span><span>→</span>
-                    </Link>
-                  ))}
+                      padding: "16px 16px", background: "rgba(10, 102, 194, 0.05)", border: "1px solid rgba(10, 102, 194, 0.2)",
+                      borderRadius: 10, color: "white", fontSize: 13, width: "100%", cursor: "pointer", transition: "all 0.2s"
+                    }}>
+                      <span>{generatingLinkedIn ? "Optimizing..." : "LinkedIn Optimizer"}</span>
+                      {generatingLinkedIn ? <span style={{ animation: "pulse 1s infinite" }}>⏳</span> : <span>→</span>}
+                    </button></MagneticButton>
+                  )}
+                  <Link href="/interview" style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "12px 16px", border: "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: 10, textDecoration: "none", color: "rgba(255,255,255,0.5)",
+                    fontSize: 13, transition: "all 0.2s",
+                  }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.2)"; (e.currentTarget as HTMLAnchorElement).style.color = "white"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.06)"; (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.5)"; }}
+                  >
+                    <span>Practice Interview</span><span>→</span>
+                  </Link>
                 </div>
               </div>
             </div>
