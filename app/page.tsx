@@ -191,6 +191,7 @@ export default function Home() {
           <a href="#features" className="rc-nav-link">Features</a>
           <a href="#how" className="rc-nav-link">How it works</a>
           <a href="#reviews" className="rc-nav-link">Reviews</a>
+          <Link href="/dashboard" className="rc-nav-link" style={{ color: "#34d399", fontWeight: 700 }}>Dashboard</Link>
           <Link href="/login" className="rc-nav-link">Login</Link>
           <Link href="/signup" className="rc-nav-btn">Sign Up →</Link>
         </div>

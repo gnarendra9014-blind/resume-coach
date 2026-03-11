@@ -41,13 +41,17 @@ export async function POST(req: NextRequest) {
         ${scrapedProfile}
         
         CRITICAL TASK: Since they provided a URL, you MUST audit their current profile.
-        Output exactly 3 sections:
-        1. [CURRENT ISSUES]: Based on what a typical profile for this role should look like vs their current metadata/resume, what are they likely missing on their LinkedIn?
-        2. [RECOMMENDED HEADLINE]: A highly engaging, keyword-rich LinkedIn headline (under 120 chars) they should change to.
-        3. [WHAT TO CHANGE IN ABOUT]: Specific, actionable bullet points on what they need to rewrite in their "About" section to secure interviews for this specific role.`
-        : `Return exactly two sections in plain text:
-        1. [HEADLINE]: A highly engaging, keyword-rich LinkedIn headline (under 120 characters) that stands out to recruiters looking for this role.
-        2. [ABOUT]: A persuasive, story-driven "About" section that highlights their top skills, experience, and passion. Make it sound professional yet approachable. Do not use cheesy buzzwords. Break it into readable paragraphs.`
+        Output exactly 3 properties in valid JSON format:
+        {
+          "currentIssues": "Based on what a typical profile for this role should look like vs their current metadata/resume, what are they likely missing on their LinkedIn?",
+          "recommendedHeadline": "A highly engaging, keyword-rich LinkedIn headline (under 120 chars) they should change to.",
+          "whatToChangeInAbout": "Specific, actionable bullet points on what they need to rewrite in their 'About' section to secure interviews for this specific role."
+        }`
+        : `Output EXACTLY valid JSON with the following two properties:
+        {
+          "headline": "A highly engaging, keyword-rich LinkedIn headline (under 120 characters) that stands out to recruiters looking for this role.",
+          "about": "A persuasive, story-driven 'About' section that highlights their top skills, experience, and passion. Make it sound professional yet approachable. Break it into readable paragraphs."
+        }`
     }`;
 
     const response = await groq.chat.completions.create({
@@ -55,9 +59,10 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       max_tokens: 1000,
+      response_format: { type: "json_object" },
     });
 
-    return NextResponse.json({ linkedInOptimized: response.choices[0].message.content });
+    return NextResponse.json({ linkedInOptimized: JSON.parse(response.choices[0].message.content || "{}") });
   } catch (error: any) {
     console.error("LinkedIn Optimizer error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

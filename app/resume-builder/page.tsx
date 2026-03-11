@@ -1,7 +1,10 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { v4 as uuidv4 } from "uuid";
 import MagneticButton from "../components/MagneticButton";
+import { generateAndDownloadDocx } from "../utils/docx";
+import { useDashboardStore } from "../store/dashboardStore";
 
 const LANGUAGES = ["English", "Hindi", "French", "German", "Spanish"];
 const TEMPLATES = ["Modern", "Classic", "Minimal", "Creative"];
@@ -53,8 +56,11 @@ export default function ResumeBuilder() {
 
   // LinkedIn Optimizer States
   const [linkedInUrl, setLinkedInUrl] = useState("");
-  const [linkedInText, setLinkedInText] = useState<string | null>(null);
+  const [linkedInText, setLinkedInText] = useState<any>(null);
   const [generatingLinkedIn, setGeneratingLinkedIn] = useState(false);
+  // Resume Tracker State
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  const { saveResume } = useDashboardStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   useReveal();
 
@@ -125,6 +131,18 @@ export default function ResumeBuilder() {
       });
       const scoreData = await scoreRes.json();
       setAtsScore(scoreData.score ?? null);
+      
+      const newId = resumeId || uuidv4();
+      setResumeId(newId);
+      saveResume({
+        id: newId,
+        name: form.name || "Untitled Resume",
+        role: form.role,
+        createdAt: Date.now(),
+        resumeText: resumeText,
+        atsScore: scoreData.score ?? null,
+        status: "draft",
+      });
     } catch {
       setResult("Error generating resume. Please try again.");
     }
@@ -245,6 +263,7 @@ export default function ResumeBuilder() {
         <Link href="/" className="rc-nav-logo">Resume Coach</Link>
         <div className="rc-nav-links">
           <Link href="/" className="rc-nav-link" style={{ marginRight: 16 }}>← Home</Link>
+          <Link href="/dashboard" className="rc-nav-link" style={{ color: "#34d399", fontWeight: 700 }}>Dashboard</Link>
           <Link href="/resume-builder" className="rc-nav-link" style={{ color: "white" }}>Resume Builder</Link>
           <Link href="/interview" className="rc-nav-link">Mock Interview</Link>
           <Link href="/resume-reviewer" className="rc-nav-link">Reviewer</Link>
@@ -519,9 +538,31 @@ export default function ResumeBuilder() {
                     <span>Download PDF</span><span>↓</span>
                   </button></MagneticButton>
                   
-                  {/* GENERATE DOCX STUB (For future actual docx gen) */}
+                  {/* SAVE TO DASHBOARD BUTTON */}
                   <MagneticButton><button
-                    onClick={() => alert("We will implement genuine .docx generation later via docx npm!")}
+                    onClick={() => {
+                      if (!result || !resumeId) return;
+                      saveResume({
+                        id: resumeId,
+                        name: form.name || "Untitled Resume",
+                        role: form.role,
+                        createdAt: Date.now(),
+                        resumeText: result,
+                        atsScore: atsScore,
+                        status: "applied",
+                      });
+                      alert("Successfully saved to your Job Kanban Dashboard!");
+                    }}
+                    className="mag-btn" style={{ padding: "10px 20px", fontSize: 13, borderColor: "rgba(52, 211, 153, 0.4)", color: "#34d399" }}>
+                    <span>Save to Dashboard</span>
+                  </button></MagneticButton>
+                  
+                  {/* GENERATE DOCX */}
+                  <MagneticButton><button
+                    onClick={() => {
+                        if (!result) return;
+                        generateAndDownloadDocx(result, `${form.name || "resume"}.docx`)
+                    }}
                     className="mag-btn" style={{ padding: "10px 20px", fontSize: 13, borderColor: "rgba(255,255,255,0.2)" }}>
                     <span>Word (.docx)</span>
                   </button></MagneticButton>
@@ -597,8 +638,13 @@ export default function ResumeBuilder() {
                     background: "rgba(10, 102, 194, 0.05)",
                     border: "1px solid rgba(10, 102, 194, 0.2)"
                   }}>
-                    <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.8, color: "rgba(255,255,255,0.8)" }}>
-                      {linkedInText}
+                    <div style={{ fontSize: 13, lineHeight: 1.8, color: "rgba(255,255,255,0.8)" }}>
+                      {Object.entries(linkedInText).map(([key, value]) => (
+                        <div key={key} style={{ marginBottom: 20 }}>
+                          <h4 style={{ textTransform: "capitalize", color: "#60a5fa", marginBottom: 8 }}>{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
+                          <p style={{ whiteSpace: "pre-wrap" }}>{value as string}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
