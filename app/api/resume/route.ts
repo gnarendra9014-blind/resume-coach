@@ -6,7 +6,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, phone, role, skills, education, projects, experience, language, template } = body;
+    const { name, email, phone, role, skills, education, projects, experience, language, template, jobDescription } = body;
 
     const languageInstruction = language && language !== "english"
       ? `Write the entire resume in ${language} language.`
@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
 
     const templateInstruction = templateMap[template] || templateMap["classic"];
 
+    const tailerPrompt = jobDescription ? `
+      CRITICAL INSTRUCTION: The user is applying for a specific job. 
+      Here is the Job Description: "${jobDescription}"
+      You MUST strategically re-write and optimize the bullet points in their experience, skills, and projects to heavily match the keywords and responsibilities in this job description. Do not lie, but frame their background naturally around these requirements to ensure a 100% ATS score.` : "";
+
     const prompt = `Create a professional resume for a fresher with the following details:
 Name: ${name}
 Email: ${email}
@@ -33,6 +38,7 @@ Education: ${education}
 
 Template Style: ${templateInstruction}
 ${languageInstruction}
+${tailerPrompt}
 Make it ATS friendly and impressive. Use plain text formatting.`;
 
     const response = await groq.chat.completions.create({

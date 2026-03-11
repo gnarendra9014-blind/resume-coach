@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import MagneticButton from "./components/MagneticButton";
 
 function useReveal() {
   useEffect(() => {
@@ -158,7 +159,7 @@ export default function Home() {
   const ease = "cubic-bezier(0.16,1,0.3,1)";
 
   return (
-    <div style={{ background: "#000", color: "#fff", minHeight: "100vh", fontFamily: "var(--font-body)", overflowX: "hidden" }}>
+    <div style={{ color: "#fff", minHeight: "100vh", fontFamily: "var(--font-body)", overflowX: "hidden", position: "relative" }}>
 
       <style jsx global>{`
         @keyframes floatA { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-20px) rotate(2deg)} }
@@ -186,6 +187,7 @@ export default function Home() {
       <nav className={`rc-nav ${scrolled ? "scrolled" : ""}`} style={{ zIndex: 100 }}>
         <Link href="/" className="rc-nav-logo">Resume Coach</Link>
         <div className="rc-nav-links">
+          <Link href="/" className="rc-nav-link" style={{ color: "white" }}>Home</Link>
           <a href="#features" className="rc-nav-link">Features</a>
           <a href="#how" className="rc-nav-link">How it works</a>
           <a href="#reviews" className="rc-nav-link">Reviews</a>
@@ -238,7 +240,7 @@ export default function Home() {
             AI-powered career tools
           </div>
 
-          <h1 className="letter-reveal" style={{ fontFamily: "var(--font-display)", fontSize: "clamp(56px,9vw,120px)", fontWeight: 900, lineHeight: 0.95, letterSpacing: "-4px", marginBottom: 48, maxWidth: 700 }}>
+          <h1 className="letter-reveal text-gradient-animated" style={{ fontFamily: "var(--font-display)", fontSize: "clamp(56px,9vw,120px)", fontWeight: 900, lineHeight: 0.95, letterSpacing: "-4px", marginBottom: 48, maxWidth: 700 }}>
             {splitLetters("Land your")}
             <br />
             {splitLetters("dream job.")}
@@ -249,8 +251,8 @@ export default function Home() {
               Build ATS-ready resumes, practice mock interviews, get expert feedback — all powered by AI.
             </p>
             <div className="reveal" style={{ display: "flex", gap: 14, transitionDelay: "0.5s" }}>
-              <Link href="/resume-builder" className="mag-btn mag-btn-filled"><span>Build My Resume</span><span>→</span></Link>
-              <Link href="/interview" className="mag-btn"><span>Try Interview</span><span>↗</span></Link>
+              <MagneticButton><Link href="/resume-builder" className="mag-btn mag-btn-filled"><span>Build My Resume</span><span>→</span></Link></MagneticButton>
+              <MagneticButton><Link href="/interview" className="mag-btn"><span>Try Interview</span><span>↗</span></Link></MagneticButton>
             </div>
           </div>
         </div>
@@ -341,7 +343,7 @@ export default function Home() {
               { n: "03", icon: "⚡", title: "Get AI output", desc: "Personalized results in seconds." },
               { n: "04", icon: "🚀", title: "Land the job", desc: "Apply with confidence." },
             ].map((s, i) => (
-              <div key={s.n} className="reveal" style={{ padding: "40px 32px", border: "1px solid rgba(255,255,255,0.06)", borderRight: i < 3 ? "none" : "1px solid rgba(255,255,255,0.06)", transitionDelay: `${i * 0.1}s` }}>
+              <div key={s.n} className="reveal glass-panel" style={{ padding: "40px 32px", borderRight: i < 3 ? "none" : "1px solid rgba(255,255,255,0.06)", transitionDelay: `${i * 0.1}s`, borderRadius: "16px", margin: "4px" }}>
                 <div style={{ fontSize: 32, marginBottom: 24 }}>{s.icon}</div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em", marginBottom: 16 }}>{s.n}</div>
                 <h3 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color: "white", marginBottom: 12, letterSpacing: "-0.5px" }}>{s.title}</h3>
@@ -364,7 +366,7 @@ export default function Home() {
             { name: "Arjun M.", role: "Frontend Dev @ Microsoft", text: "The mock interview feature is so realistic. I felt completely prepared walking into the actual interview.", avatar: "A" },
             { name: "Sneha R.", role: "Data Analyst @ Amazon", text: "The study roadmap showed me exactly what to study for my role. Best tool for interview prep.", avatar: "S" },
           ].map((t, i) => (
-            <div key={t.name} className="reveal" style={{ padding: "48px 40px", border: "1px solid rgba(255,255,255,0.06)", borderRight: i < 2 ? "none" : "1px solid rgba(255,255,255,0.06)", transitionDelay: `${i * 0.1}s` }}>
+            <div key={t.name} className="reveal glass-panel" style={{ padding: "48px 40px", borderRight: i < 2 ? "none" : "1px solid rgba(255,255,255,0.06)", transitionDelay: `${i * 0.1}s`, borderRadius: "16px", margin: "4px" }}>
               <div style={{ display: "flex", gap: 2, marginBottom: 32 }}>
                 {[...Array(5)].map((_,j) => <span key={j} style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>★</span>)}
               </div>
@@ -394,8 +396,8 @@ export default function Home() {
               Join thousands of job seekers who used Resume Coach to land their dream jobs.
             </p>
             <div style={{ display: "flex", gap: 14 }}>
-              <Link href="/resume-builder" className="mag-btn mag-btn-filled"><span>Build My Resume</span><span>→</span></Link>
-              <Link href="/interview" className="mag-btn"><span>Mock Interview</span><span>↗</span></Link>
+              <MagneticButton><Link href="/resume-builder" className="mag-btn mag-btn-filled"><span>Build My Resume</span><span>→</span></Link></MagneticButton>
+              <MagneticButton><Link href="/interview" className="mag-btn"><span>Mock Interview</span><span>↗</span></Link></MagneticButton>
             </div>
           </div>
         </div>
