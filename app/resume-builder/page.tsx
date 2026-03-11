@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import MagneticButton from "../components/MagneticButton";
 import { generateAndDownloadDocx } from "../utils/docx";
 import { useDashboardStore } from "../store/dashboardStore";
+import { ModernTemplate, ClassicTemplate } from "../components/ResumeTemplates";
 
 const LANGUAGES = ["English", "Hindi", "French", "German", "Spanish"];
 const TEMPLATES = ["Modern", "Classic", "Minimal", "Creative"];
@@ -122,15 +123,16 @@ export default function ResumeBuilder() {
         body: JSON.stringify({ ...form, language, template }),
       });
       const data = await res.json();
-      const resumeText = data.result || data.resume || "";
-      setResult(resumeText);
+      const resumeDataJson = JSON.parse(data.result || data.resume || "{}");
+      setResult(resumeDataJson);
       const scoreRes = await fetch("/api/ats-score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume: resumeText, role: form.role }),
+        body: JSON.stringify({ resume: JSON.stringify(resumeDataJson), role: form.role }),
       });
       const scoreData = await scoreRes.json();
       setAtsScore(scoreData.score ?? null);
+      setPdfPreviewUrl(null); // No longer needed, using active DOM templates
       
       const newId = resumeId || uuidv4();
       setResumeId(newId);
@@ -139,7 +141,7 @@ export default function ResumeBuilder() {
         name: form.name || "Untitled Resume",
         role: form.role,
         createdAt: Date.now(),
-        resumeText: resumeText,
+        resumeText: JSON.stringify(resumeDataJson),
         atsScore: scoreData.score ?? null,
         status: "draft",
       });
@@ -524,15 +526,22 @@ export default function ResumeBuilder() {
                     <span>Edit</span>
                   </button></MagneticButton>
                   <MagneticButton><button
-                    onClick={() => {
-                      if (!pdfPreviewUrl) return;
-                      const pdfName = `${form.name || "resume"}.pdf`;
-                      const link = document.createElement("a");
-                      link.href = pdfPreviewUrl;
-                      link.download = pdfName;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
+                    onClick={async () => {
+                      const element = document.getElementById("resume-template-container");
+                      if (!element) return;
+                      
+                      // Dynamic import to avoid SSR errors
+                      // @ts-ignore
+                      const html2pdf = (await import("html2pdf.js")).default;
+                      
+                      const opt = {
+                        margin:       0,
+                        filename:     `${form.name || "resume"}.pdf`,
+                        image:        { type: 'jpeg' as const, quality: 0.98 },
+                        html2canvas:  { scale: 2 },
+                        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+                      };
+                      html2pdf().set(opt).from(element).save();
                     }}
                     className="mag-btn mag-btn-filled" style={{ padding: "10px 20px", fontSize: 13 }}>
                     <span>Download PDF</span><span>↓</span>
@@ -570,33 +579,24 @@ export default function ResumeBuilder() {
               </div>
               <div className="glass-panel" style={{
                 borderRadius: 16, padding: "12px",
-                height: "75vh", overflow: "hidden",
-                position: "relative"
+                height: "1056px", overflow: "hidden",
+                position: "relative",
+                background: "white"
               }}>
-                {pdfPreviewUrl ? (
-                  <iframe 
-                    src={`${pdfPreviewUrl}#toolbar=0&navpanes=0`} 
-                    style={{ width: "100%", height: "100%", border: "none", borderRadius: 8, background: "white" }}
-                  />
-                ) : (
-                  <div style={{ padding: "40px", height: "100%", background: "rgba(255,255,255,0.02)" }}>
-                    <div style={{ height: 40, width: "40%", background: "rgba(255,255,255,0.1)", borderRadius: 8, animation: "pulse 1.5s infinite", marginBottom: 20 }} />
-                    <div style={{ height: 2, width: "100%", background: "rgba(255,255,255,0.05)", marginBottom: 40 }} />
-                    {[1, 2, 3].map(i => (
-                      <div key={i} style={{ marginBottom: 40 }}>
-                        <div style={{ height: 20, width: "25%", background: "rgba(255,255,255,0.1)", borderRadius: 4, animation: "pulse 1.5s infinite", animationDelay: `${i * 0.2}s`, marginBottom: 16 }} />
-                        <div style={{ height: 12, width: "90%", background: "rgba(255,255,255,0.05)", borderRadius: 4, animation: "pulse 1.5s infinite", animationDelay: `${i * 0.2 + 0.1}s`, marginBottom: 12 }} />
-                        <div style={{ height: 12, width: "70%", background: "rgba(255,255,255,0.05)", borderRadius: 4, animation: "pulse 1.5s infinite", animationDelay: `${i * 0.2 + 0.2}s`, marginBottom: 12 }} />
-                        <div style={{ height: 12, width: "85%", background: "rgba(255,255,255,0.05)", borderRadius: 4, animation: "pulse 1.5s infinite", animationDelay: `${i * 0.2 + 0.3}s` }} />
+                <div id="resume-template-container">
+                    {result && typeof result === "object" ? (
+                      template === "Classic" || template === "Minimal" ? (
+                        <ClassicTemplate data={result as any} />
+                      ) : (
+                        <ModernTemplate data={result as any} />
+                      )
+                    ) : (
+                      <div style={{ padding: 40, color: "black", whiteSpace: "pre-wrap" }}>
+                        {result && typeof result === "string" ? result : "Generating structural blueprint..."}
                       </div>
-                    ))}
-                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center", backdropFilter: "blur(10px)", padding: "20px 40px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.5)" }}>
-                       <span className="text-gradient-animated" style={{ fontWeight: 800 }}>Generating AI Resume...</span>
-                    </div>
-                  </div>
-                )}
+                    )}
+                </div>
               </div>
-              
               {/* COVER LETTER SECTION */}
               {coverLetter && clPreviewUrl && (
                 <div style={{ marginTop: 40 }}>

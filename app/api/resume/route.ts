@@ -27,24 +27,43 @@ export async function POST(req: NextRequest) {
       You MUST strategically re-write and optimize the bullet points in their experience, skills, and projects to heavily match the keywords and responsibilities in this job description. Do not lie, but frame their background naturally around these requirements to ensure a 100% ATS score.` : "";
 
     const prompt = `Create a professional resume for a fresher with the following details:
-Name: ${name}
-Email: ${email}
-Phone: ${phone}
-Target Role: ${role}
-Skills: ${skills}
-Projects: ${projects}
-Experience: ${experience}
-Education: ${education}
-
-Template Style: ${templateInstruction}
-${languageInstruction}
-${tailerPrompt}
-Make it ATS friendly and impressive. Use plain text formatting.`;
+        Name: ${name}
+        Email: ${email}
+        Phone: ${phone}
+        Target Role: ${role}
+        Skills: ${skills}
+        Projects: ${projects}
+        Experience: ${experience}
+        Education: ${education}
+        
+        Template Style Strategy: ${templateInstruction}
+        ${languageInstruction}
+        ${tailerPrompt}
+        
+        CRITICAL TASK: Output EXACTLY a valid JSON object matching this schema. Do not invent details, use the provided input. Extrapolate missing professional summaries or formatting needed.
+        {
+          "personal": {
+            "name": "Full Name",
+            "contact": "Email | Phone | Location / LinkedIn"
+          },
+          "summary": "A strong, optimized professional summary (3-4 lines).",
+          "experience": [
+            { "title": "Job Title", "company": "Company Name", "date": "Date Range", "points": ["Bullet 1", "Bullet 2"] }
+          ],
+          "education": [
+            { "degree": "Degree Name", "school": "School Name", "date": "Date Range", "details": "GPA/Awards/Relevant Coursework" }
+          ],
+          "projects": [
+            { "name": "Project Name", "tech": "Tech Stack", "date": "Date Range", "points": ["Bullet 1", "Bullet 2"] }
+          ],
+          "skills": ["Category 1: Skill A, Skill B", "Category 2: Skill C, Skill D"]
+        }`;
 
     const response = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 1000,
+      max_tokens: 1500,
+      response_format: { type: "json_object" },
     });
 
     return NextResponse.json({ result: response.choices[0].message.content });
