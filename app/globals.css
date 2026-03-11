@@ -1,1 +1,149 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800;900&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --black: #000000;
+  --white: #ffffff;
+  --border: rgba(255,255,255,0.08);
+  --font-display: 'Sora', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: #000000;
+  color: #ffffff;
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  cursor: auto;
+}
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.rc-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 28px 48px;
+  transition: all 0.4s var(--ease);
+}
+.rc-nav.scrolled {
+  padding: 18px 48px;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.rc-nav-logo {
+  font-family: var(--font-display);
+  font-weight: 900; font-size: 18px;
+  color: white; text-decoration: none;
+  letter-spacing: -0.5px;
+}
+.rc-nav-links { display: flex; gap: 40px; align-items: center; }
+.rc-nav-link {
+  font-size: 13px; font-weight: 500;
+  color: rgba(255,255,255,0.45);
+  text-decoration: none;
+  letter-spacing: 0.05em;
+  transition: color 0.2s;
+  position: relative;
+}
+.rc-nav-link::after {
+  content: '';
+  position: absolute; bottom: -2px; left: 0;
+  width: 0; height: 1px;
+  background: white;
+  transition: width 0.35s var(--ease);
+}
+.rc-nav-link:hover { color: white; }
+.rc-nav-link:hover::after { width: 100%; }
+.rc-nav-btn {
+  font-size: 13px; font-weight: 700;
+  color: black; background: white;
+  text-decoration: none;
+  padding: 10px 22px;
+  border-radius: 100px;
+  transition: all 0.3s var(--ease);
+}
+.rc-nav-btn:hover {
+  background: rgba(255,255,255,0.85);
+  transform: translateY(-2px);
+}
+
+.section-label {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  display: flex; align-items: center; gap: 12px;
+}
+.section-label::before {
+  content: '';
+  display: inline-block;
+  width: 24px; height: 1px;
+  background: rgba(255,255,255,0.3);
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.9s var(--ease), transform 0.9s var(--ease);
+}
+.reveal.visible { opacity: 1; transform: none; }
+
+.letter-reveal span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(60px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+.letter-reveal.visible span { opacity: 1; transform: none; }
+
+.rc-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+}
+
+.mag-btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 15px;
+  color: white; text-decoration: none;
+  padding: 16px 36px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 100px;
+  transition: all 0.3s var(--ease);
+  position: relative; overflow: hidden;
+  background: transparent;
+}
+.mag-btn::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: white;
+  border-radius: 100px;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s var(--ease);
+  z-index: 0;
+}
+.mag-btn:hover { color: black; border-color: white; }
+.mag-btn:hover::before { transform: scaleX(1); }
+.mag-btn span { position: relative; z-index: 1; }
+
+.mag-btn-filled {
+  background: white; color: black;
+  border: 1px solid white;
+}
+.mag-btn-filled::before { background: #111; }
+.mag-btn-filled:hover { color: white; }
+
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes fadeUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+@keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

@@ -1,424 +1,432 @@
 "use client";
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 
-const LANGUAGES = [
-  { code: "english", label: "English" },
-  { code: "hindi", label: "Hindi" },
-  { code: "telugu", label: "Telugu" },
-  { code: "tamil", label: "Tamil" },
-  { code: "kannada", label: "Kannada" },
-];
+const LANGUAGES = ["English", "Hindi", "French", "German", "Spanish"];
+const TEMPLATES = ["Modern", "Classic", "Minimal", "Creative"];
 
-const TEMPLATES = [
-  { code: "classic", label: "📄 Classic", desc: "Traditional ALL CAPS headers" },
-  { code: "modern", label: "✨ Modern", desc: "Sleek with bold separators" },
-  { code: "minimal", label: "🎯 Minimal", desc: "Short and to the point" },
-  { code: "creative", label: "🎨 Creative", desc: "Unique structure that stands out" },
-];
+function useReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll(".reveal, .letter-reveal");
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => entry.target.classList.add("visible"), i * 60);
+        }
+      });
+    }, { threshold: 0.1 });
+    els.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+}
+
+function splitLetters(text: string) {
+  return text.split("").map((char, i) => (
+    <span key={i} style={{ transitionDelay: `${i * 0.03}s` }}>
+      {char === " " ? "\u00A0" : char}
+    </span>
+  ));
+}
 
 export default function ResumeBuilder() {
-  const [form, setForm] = useState({
-    name: "", email: "", phone: "", role: "",
-    skills: "", education: "", projects: "", experience: "",
-  });
-  const [language, setLanguage] = useState("english");
-  const [template, setTemplate] = useState("classic");
-  const [resume, setResume] = useState("");
+  const [scrolled, setScrolled] = useState(false);
+  const [step, setStep] = useState(1);
+  const [language, setLanguage] = useState("English");
+  const [template, setTemplate] = useState("Modern");
   const [loading, setLoading] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [result, setResult] = useState("");
   const [atsScore, setAtsScore] = useState<number | null>(null);
-  const [atsTips, setAtsTips] = useState<string[]>([]);
-  const [atsLoading, setAtsLoading] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [form, setForm] = useState({
+    name: "", email: "", phone: "", location: "",
+    role: "", experience: "", skills: "",
+    education: "", projects: "", achievements: "",
+  });
+  useReveal();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const generateResume = async () => {
+  const handleGenerate = async () => {
     setLoading(true);
-    setSaved(false);
+    setResult("");
     setAtsScore(null);
-    setAtsTips([]);
-    const res = await fetch("/api/resume", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, language, template }),
-    });
-    const data = await res.json();
-    setResume(data.result);
+    try {
+      const res = await fetch("/api/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, language, template }),
+      });
+      const data = await res.json();
+      const resumeText = data.result || data.resume || "";
+      setResult(resumeText);
+      const scoreRes = await fetch("/api/ats-score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume: resumeText, role: form.role }),
+      });
+      const scoreData = await scoreRes.json();
+      setAtsScore(scoreData.score ?? null);
+      setStep(3);
+    } catch {
+      setResult("Error generating resume. Please try again.");
+    }
     setLoading(false);
   };
 
-  const regenerateResume = async () => {
-    setRegenerating(true);
-    setSaved(false);
-    setAtsScore(null);
-    setAtsTips([]);
-    const res = await fetch("/api/resume", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, language, template }),
-    });
-    const data = await res.json();
-    setResume(data.result);
-    setRegenerating(false);
+  const inputStyle = {
+    width: "100%", background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12,
+    padding: "14px 18px", color: "white", fontSize: 14,
+    fontFamily: "var(--font-body)", outline: "none",
+    transition: "border-color 0.2s",
   };
 
-  const checkATS = async () => {
-    setAtsLoading(true);
-    const res = await fetch("/api/ats-score", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resume }),
-    });
-    const data = await res.json();
-    const text = data.result;
-    const scoreMatch = text.match(/SCORE:\s*(\d+)/);
-    const tipsMatch = text.split("TIPS:")[1];
-    if (scoreMatch) setAtsScore(parseInt(scoreMatch[1]));
-    if (tipsMatch) {
-      const tips = tipsMatch.split("\n").filter((t: string) => t.trim().startsWith("-")).map((t: string) => t.replace("-", "").trim());
-      setAtsTips(tips);
-    }
-    setAtsLoading(false);
+  const labelStyle = {
+    fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+    textTransform: "uppercase" as const, color: "rgba(255,255,255,0.35)",
+    marginBottom: 8, display: "block",
   };
 
-  const saveResume = async () => {
-    if (!user) { window.location.href = "/login"; return; }
-    setSaving(true);
-    const { error } = await supabase.from("resumes").insert({
-      user_id: user.id,
-      name: form.name + " - " + form.role,
-      content: resume,
-    });
-    if (!error) setSaved(true);
-    setSaving(false);
-  };
+  return (
+    <div style={{ background: "#000", color: "#fff", minHeight: "100vh", fontFamily: "var(--font-body)" }}>
 
-  // HERO PAGE
-  if (!started && !resume) {
-    return (
-      <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-        {/* Navbar */}
-        <nav className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm">
-          <a href="/" className="flex items-center gap-2">
-            <div className="bg-blue-600 text-white font-bold text-lg px-3 py-1 rounded-md">RC</div>
-            <span className="text-xl font-bold text-gray-800">Resume Coach</span>
-          </a>
-          <div className="flex items-center gap-3">
-            {user ? (
-              <a href="/my-resumes" className="text-sm text-blue-600 font-semibold border border-blue-600 px-4 py-1.5 rounded-full hover:bg-blue-50 transition">My Resumes</a>
-            ) : (
-              <a href="/login" className="text-sm text-blue-600 font-semibold border border-blue-600 px-4 py-1.5 rounded-full hover:bg-blue-50 transition">Sign In</a>
-            )}
-          </div>
-        </nav>
+      {/* Grid */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
 
-        {/* Hero */}
-        <div className="max-w-6xl mx-auto px-8 py-20 flex flex-col md:flex-row items-center gap-12">
-          <div className="flex-1">
-            <div className="inline-block bg-blue-100 text-blue-700 text-sm font-semibold px-4 py-1 rounded-full mb-6">
-              ✨ AI-Powered Resume Builder
-            </div>
-            <h1 className="text-5xl font-extrabold text-gray-900 leading-tight mb-6">
-              Build a Resume<br />That Gets You <span className="text-blue-600">Hired</span>
-            </h1>
-            <p className="text-gray-500 text-lg mb-8 max-w-md">
-              Fill in your details and our AI will craft a professional, ATS-friendly resume in seconds. Choose from 4 templates and 5 languages.
-            </p>
-            <div className="flex gap-4 flex-wrap">
-              <button
-                onClick={() => setStarted(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-full text-lg transition shadow-lg hover:shadow-xl"
-              >
-                Create My Resume →
-              </button>
-              <a href="/resume-reviewer">
-                <button className="border-2 border-gray-300 hover:border-blue-400 text-gray-700 font-bold px-8 py-4 rounded-full text-lg transition">
-                  Review Existing Resume
-                </button>
-              </a>
-            </div>
-          </div>
+      {/* Orb */}
+      <div style={{ position: "fixed", top: "20%", right: "10%", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%)", filter: "blur(40px)", pointerEvents: "none", zIndex: 0 }} />
 
-          {/* Resume Mockup */}
-          <div className="flex-1 flex justify-center">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 w-80 border border-gray-100 relative">
-              <div className="absolute -top-3 -right-3 bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full shadow">
-                ✨ AI Generated
-              </div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-lg">R</div>
-                <div>
-                  <div className="font-bold text-gray-800">Rahul Sharma</div>
-                  <div className="text-gray-400 text-xs">Software Developer</div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="h-2 bg-gray-100 rounded-full w-full"></div>
-                <div className="h-2 bg-gray-100 rounded-full w-4/5"></div>
-                <div className="h-2 bg-blue-100 rounded-full w-3/5 mt-3"></div>
-                <div className="h-2 bg-gray-100 rounded-full w-full"></div>
-                <div className="h-2 bg-gray-100 rounded-full w-5/6"></div>
-                <div className="h-2 bg-blue-100 rounded-full w-3/5 mt-3"></div>
-                <div className="h-2 bg-gray-100 rounded-full w-full"></div>
-                <div className="h-2 bg-gray-100 rounded-full w-4/5"></div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <div className="w-6 h-6 rounded-full bg-red-400"></div>
-                <div className="w-6 h-6 rounded-full bg-green-400"></div>
-                <div className="w-6 h-6 rounded-full bg-blue-600 ring-2 ring-blue-300"></div>
-                <div className="w-6 h-6 rounded-full bg-purple-400"></div>
-              </div>
-            </div>
-          </div>
+      {/* NAV */}
+      <nav className={`rc-nav ${scrolled ? "scrolled" : ""}`} style={{ zIndex: 100 }}>
+        <Link href="/" className="rc-nav-logo">Resume Coach</Link>
+        <div className="rc-nav-links">
+          <Link href="/resume-builder" className="rc-nav-link" style={{ color: "white" }}>Resume Builder</Link>
+          <Link href="/interview" className="rc-nav-link">Mock Interview</Link>
+          <Link href="/resume-reviewer" className="rc-nav-link">Reviewer</Link>
+          <Link href="/interview-tips" className="rc-nav-link">Tips</Link>
         </div>
+      </nav>
 
-        {/* Feature Cards */}
-        <div className="max-w-6xl mx-auto px-8 pb-20">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-10">Everything you need to land the job</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* HERO */}
+      <section style={{ position: "relative", zIndex: 1, padding: "160px 48px 80px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div className="section-label reveal" style={{ marginBottom: 24 }}>AI Resume Builder</div>
+          <h1 className="letter-reveal" style={{ fontFamily: "var(--font-display)", fontSize: "clamp(48px,8vw,100px)", fontWeight: 900, letterSpacing: "-4px", lineHeight: 0.95, marginBottom: 32 }}>
+            {splitLetters("Build your")}
+            <br />
+            {splitLetters("resume.")}
+          </h1>
+          <p className="reveal" style={{ fontSize: 17, color: "rgba(255,255,255,0.4)", maxWidth: 480, lineHeight: 1.75 }}>
+            ATS-optimized resumes generated in seconds. Pick a template, fill in your details, get hired.
+          </p>
+        </div>
+      </section>
+
+      <div className="rc-divider" style={{ position: "relative", zIndex: 1 }} />
+
+      {/* STEP INDICATOR */}
+      <div style={{ position: "relative", zIndex: 1, padding: "32px 48px", maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ display: "flex", gap: 0 }}>
+          {["Preferences", "Your Details", "Your Resume"].map((s, i) => (
+            <div key={s} style={{ display: "flex", alignItems: "center", gap: 0 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "12px 24px",
+                borderRadius: 100,
+                background: step === i + 1 ? "white" : "transparent",
+                border: "1px solid",
+                borderColor: step === i + 1 ? "white" : step > i + 1 ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.1)",
+                transition: "all 0.4s var(--ease)",
+              }}>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 900, color: step === i + 1 ? "black" : step > i + 1 ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.2)", letterSpacing: "0.05em" }}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: step === i + 1 ? "black" : step > i + 1 ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.2)" }}>{s}</span>
+                {step > i + 1 && <span style={{ color: "#34d399", fontSize: 12 }}>✓</span>}
+              </div>
+              {i < 2 && <div style={{ width: 32, height: 1, background: "rgba(255,255,255,0.1)" }} />}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rc-divider" style={{ position: "relative", zIndex: 1 }} />
+
+      {/* STEP 1 — Preferences */}
+      {step === 1 && (
+        <section style={{ position: "relative", zIndex: 1, padding: "64px 48px", maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64 }}>
+
+            {/* Language */}
+            <div className="reveal">
+              <div className="section-label" style={{ marginBottom: 32 }}>Language</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {LANGUAGES.map((l) => (
+                  <div key={l}
+                    onClick={() => setLanguage(l)}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "20px 24px", border: "1px solid",
+                      borderColor: language === l ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.06)",
+                      background: language === l ? "rgba(255,255,255,0.05)" : "transparent",
+                      borderRadius: 12, cursor: "pointer", transition: "all 0.25s",
+                    }}
+                    onMouseEnter={e => { if (language !== l) (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.15)"; }}
+                    onMouseLeave={e => { if (language !== l) (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.06)"; }}
+                  >
+                    <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 600, color: language === l ? "white" : "rgba(255,255,255,0.4)" }}>{l}</span>
+                    {language === l && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "white", display: "block" }} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Template */}
+            <div className="reveal" style={{ transitionDelay: "0.1s" }}>
+              <div className="section-label" style={{ marginBottom: 32 }}>Template</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {TEMPLATES.map((t) => (
+                  <div key={t}
+                    onClick={() => setTemplate(t)}
+                    style={{
+                      padding: "28px 24px", border: "1px solid",
+                      borderColor: template === t ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.06)",
+                      background: template === t ? "rgba(255,255,255,0.05)" : "transparent",
+                      borderRadius: 16, cursor: "pointer", transition: "all 0.25s", position: "relative",
+                    }}
+                  >
+                    {/* Mini resume preview lines */}
+                    <div style={{ marginBottom: 16 }}>
+                      {[80, 55, 40, 65, 45].map((w, i) => (
+                        <div key={i} style={{ height: i === 0 ? 3 : 1.5, width: `${w}%`, background: template === t ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.15)", borderRadius: 2, marginBottom: i === 0 ? 8 : 5 }} />
+                      ))}
+                    </div>
+                    <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: template === t ? "white" : "rgba(255,255,255,0.3)" }}>{t}</span>
+                    {template === t && (
+                      <div style={{ position: "absolute", top: 12, right: 12, width: 20, height: 20, borderRadius: "50%", background: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "black", fontWeight: 900 }}>✓</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 64, display: "flex", justifyContent: "flex-end" }}>
+            <button onClick={() => setStep(2)} className="mag-btn mag-btn-filled">
+              <span>Continue</span><span>→</span>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* STEP 2 — Details */}
+      {step === 2 && (
+        <section style={{ position: "relative", zIndex: 1, padding: "64px 48px", maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
             {[
-              { icon: "📄", title: "4 Templates", desc: "Classic, Modern, Minimal and Creative resume formats", color: "bg-blue-50" },
-              { icon: "🌐", title: "5 Languages", desc: "Generate resumes in English, Hindi, Telugu, Tamil, Kannada", color: "bg-purple-50" },
-              { icon: "📊", title: "ATS Score", desc: "Check how well your resume performs with ATS systems", color: "bg-green-50" },
-              { icon: "🔁", title: "Regenerate", desc: "Not happy? Regenerate your resume with one click", color: "bg-yellow-50" },
-              { icon: "💾", title: "Save Resumes", desc: "Save and access all your resumes anytime", color: "bg-pink-50" },
-              { icon: "⚡", title: "Instant AI", desc: "Powered by Groq's blazing fast LLaMA AI model", color: "bg-indigo-50" },
-            ].map((f) => (
-              <div key={f.title} className={`${f.color} rounded-2xl p-6 border border-white shadow-sm hover:shadow-md transition`}>
-                <div className="text-3xl mb-3">{f.icon}</div>
-                <h3 className="font-bold text-gray-800 mb-1">{f.title}</h3>
-                <p className="text-gray-500 text-sm">{f.desc}</p>
+              { key: "name", label: "Full Name", placeholder: "John Doe" },
+              { key: "email", label: "Email", placeholder: "john@email.com" },
+              { key: "phone", label: "Phone", placeholder: "+91 98765 43210" },
+              { key: "location", label: "Location", placeholder: "Bangalore, India" },
+              { key: "role", label: "Target Role", placeholder: "Software Engineer" },
+              { key: "experience", label: "Years of Experience", placeholder: "3 years" },
+            ].map(({ key, label, placeholder }) => (
+              <div key={key}>
+                <label style={labelStyle}>{label}</label>
+                <input
+                  value={form[key as keyof typeof form]}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  style={inputStyle}
+                  onFocus={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.4)"}
+                  onBlur={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.1)"}
+                />
               </div>
             ))}
           </div>
-          <div className="text-center mt-10">
-            <button
-              onClick={() => setStarted(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-10 py-4 rounded-full text-lg transition shadow-lg"
-            >
-              Build My Resume Now →
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24, marginTop: 24 }}>
+            {[
+              { key: "skills", label: "Skills", placeholder: "React, Node.js, Python, AWS, Docker..." },
+              { key: "education", label: "Education", placeholder: "B.Tech Computer Science, VTU, 2022 — CGPA 8.5" },
+              { key: "projects", label: "Projects", placeholder: "E-commerce platform with React & Node, deployed on AWS..." },
+              { key: "achievements", label: "Achievements", placeholder: "Won national hackathon, Published research paper..." },
+            ].map(({ key, label, placeholder }) => (
+              <div key={key}>
+                <label style={labelStyle}>{label}</label>
+                <textarea
+                  value={form[key as keyof typeof form]}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  rows={3}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                  onFocus={e => (e.target as HTMLTextAreaElement).style.borderColor = "rgba(255,255,255,0.4)"}
+                  onBlur={e => (e.target as HTMLTextAreaElement).style.borderColor = "rgba(255,255,255,0.1)"}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 48, display: "flex", justifyContent: "space-between" }}>
+            <button onClick={() => setStep(1)} className="mag-btn">
+              <span>←</span><span>Back</span>
+            </button>
+            <button onClick={handleGenerate} disabled={loading} className="mag-btn mag-btn-filled">
+              <span>{loading ? "Generating..." : "Generate Resume"}</span>
+              <span>{loading ? "⏳" : "→"}</span>
             </button>
           </div>
-        </div>
-      </main>
-    );
-  }
+        </section>
+      )}
 
-  // FORM PAGE
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <nav className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm">
-        <a href="/" className="flex items-center gap-2">
-          <div className="bg-blue-600 text-white font-bold text-lg px-3 py-1 rounded-md">RC</div>
-          <span className="text-xl font-bold text-gray-800">Resume Coach</span>
-        </a>
-        {user ? (
-          <a href="/my-resumes" className="text-sm text-blue-600 font-semibold border border-blue-600 px-4 py-1.5 rounded-full hover:bg-blue-50 transition">My Resumes</a>
-        ) : (
-          <a href="/login" className="text-sm text-blue-600 font-semibold border border-blue-600 px-4 py-1.5 rounded-full hover:bg-blue-50 transition">Sign In</a>
-        )}
-      </nav>
+      {/* STEP 3 — Result */}
+      {step === 3 && (
+        <section style={{ position: "relative", zIndex: 1, padding: "64px 48px", maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 32, alignItems: "start" }}>
 
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-6">
-        {!resume ? (
-          <>
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-extrabold text-gray-900 mb-2">Fill in Your Details</h2>
-              <p className="text-gray-500">AI will generate your resume instantly</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { label: "Full Name", name: "name", placeholder: "e.g. Rahul Sharma" },
-                  { label: "Email", name: "email", placeholder: "e.g. rahul@gmail.com" },
-                  { label: "Phone", name: "phone", placeholder: "e.g. 9876543210" },
-                  { label: "Target Role", name: "role", placeholder: "e.g. Software Developer" },
-                ].map((field) => (
-                  <div key={field.name}>
-                    <label className="text-gray-600 text-sm font-medium mb-1 block">{field.label}</label>
-                    <input
-                      type="text"
-                      name={field.name}
-                      placeholder={field.placeholder}
-                      value={form[field.name as keyof typeof form]}
-                      onChange={handleChange}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:bg-white transition"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {[
-                { label: "Skills", name: "skills", placeholder: "e.g. Python, React, SQL..." },
-                { label: "Education", name: "education", placeholder: "e.g. B.E Computer Science, VTU, 2024, 8.5 CGPA" },
-                { label: "Projects", name: "projects", placeholder: "e.g. Built an e-commerce website using React..." },
-                { label: "Experience / Internships", name: "experience", placeholder: "e.g. None (Fresher)" },
-              ].map((field) => (
-                <div key={field.name}>
-                  <label className="text-gray-600 text-sm font-medium mb-1 block">{field.label}</label>
-                  <textarea
-                    rows={3}
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    value={form[field.name as keyof typeof form]}
-                    onChange={handleChange}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:bg-white transition"
-                  />
+            {/* Resume output */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+                <div className="section-label">Your Resume</div>
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button onClick={() => setStep(2)} className="mag-btn" style={{ padding: "10px 20px", fontSize: 13 }}>
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const { jsPDF } = await import("jspdf");
+                      const doc = new jsPDF();
+                      const allLines = result.split("\n");
+                      let y = 20;
+                      const ph = doc.internal.pageSize.getHeight();
+                      allLines.forEach((line: string) => {
+                        const t = line.trim();
+                        if (!t) { y += 4; return; }
+                        const isHead = t === t.toUpperCase() && t.length > 2 && t.length < 50;
+                        if (isHead) {
+                          y += 4;
+                          doc.setFont("helvetica", "bold").setFontSize(13);
+                          doc.text(t, 15, y);
+                          y += 2;
+                          doc.setDrawColor(180);
+                          doc.line(15, y, 195, y);
+                          y += 6;
+                        } else {
+                          doc.setFont("helvetica", "normal").setFontSize(10);
+                          const wrapped = doc.splitTextToSize(t, 175);
+                          wrapped.forEach((wl: string) => {
+                            if (y > ph - 20) { doc.addPage(); y = 20; }
+                            doc.text(wl, 18, y);
+                            y += 5;
+                          });
+                        }
+                        if (y > ph - 20) { doc.addPage(); y = 20; }
+                      });
+                      const pdfName = `${form.name || "resume"}.pdf`;
+                      const pdfBlob = doc.output("blob");
+                      const blobUrl = URL.createObjectURL(pdfBlob);
+                      const link = document.createElement("a");
+                      link.href = blobUrl;
+                      link.download = pdfName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                    }}
+                    className="mag-btn mag-btn-filled" style={{ padding: "10px 20px", fontSize: 13 }}>
+                    <span>Download PDF</span><span>↓</span>
+                  </button>
                 </div>
-              ))}
-            </div>
-
-            {/* Template Selector */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <label className="text-gray-700 font-semibold mb-3 block">🎨 Choose Template</label>
-              <div className="grid grid-cols-2 gap-3">
-                {TEMPLATES.map((t) => (
-                  <button
-                    key={t.code}
-                    onClick={() => setTemplate(t.code)}
-                    className={`px-4 py-3 rounded-xl border-2 text-left transition ${
-                      template === t.code
-                        ? "bg-blue-50 border-blue-500 text-blue-700"
-                        : "bg-gray-50 border-gray-200 text-gray-600 hover:border-blue-300"
-                    }`}
-                  >
-                    <div className="font-semibold text-sm">{t.label}</div>
-                    <div className="text-xs opacity-70 mt-1">{t.desc}</div>
-                  </button>
-                ))}
+              </div>
+              <div style={{
+                background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 16, padding: "40px 48px",
+                fontFamily: "var(--font-body)", fontSize: 14, lineHeight: 1.8,
+                color: "rgba(255,255,255,0.8)", whiteSpace: "pre-wrap",
+                maxHeight: "70vh", overflowY: "auto",
+              }}>
+                {result}
               </div>
             </div>
 
-            {/* Language Selector */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <label className="text-gray-700 font-semibold mb-3 block">🌐 Resume Language</label>
-              <div className="flex flex-wrap gap-3">
-                {LANGUAGES.map((lang) => (
-                  <button
-                    key={lang.code}
-                    onClick={() => setLanguage(lang.code)}
-                    className={`px-4 py-2 rounded-full border-2 text-sm font-medium transition ${
-                      language === lang.code
-                        ? "bg-blue-600 border-blue-600 text-white"
-                        : "bg-white border-gray-200 text-gray-600 hover:border-blue-400"
-                    }`}
-                  >
-                    {lang.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Sidebar */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-            <button
-              onClick={generateResume}
-              disabled={loading || !form.name || !form.role}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white py-4 rounded-full font-bold text-lg transition shadow-lg hover:shadow-xl"
-            >
-              {loading ? "✨ Generating your resume..." : "Generate Resume with AI →"}
-            </button>
-
-            <button
-              onClick={() => setStarted(false)}
-              className="w-full text-gray-400 hover:text-gray-600 text-sm transition text-center"
-            >
-              ← Back
-            </button>
-          </>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-blue-600 font-bold text-xl">✅ Your AI Generated Resume</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={regenerateResume}
-                  disabled={regenerating}
-                  className="text-sm text-yellow-600 font-semibold border-2 border-yellow-400 hover:bg-yellow-50 px-4 py-2 rounded-full transition"
-                >
-                  {regenerating ? "Regenerating..." : "🔁 Regenerate"}
-                </button>
-                <button
-                  onClick={() => { setResume(""); setSaved(false); setAtsScore(null); setAtsTips([]); }}
-                  className="text-sm text-gray-500 font-semibold border-2 border-gray-200 hover:bg-gray-50 px-4 py-2 rounded-full transition"
-                >
-                  ← Edit
-                </button>
-              </div>
-            </div>
-
-            {regenerating ? (
-              <div className="text-center py-10 text-gray-400">🔁 Generating a fresh resume...</div>
-            ) : (
-              <pre className="whitespace-pre-wrap text-gray-700 leading-relaxed font-mono text-sm mb-6 bg-gray-50 rounded-xl p-6">{resume}</pre>
-            )}
-
-            {/* ATS Score */}
-            <div className="mb-6">
-              <button
-                onClick={checkATS}
-                disabled={atsLoading || regenerating}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white py-3 rounded-full font-bold transition shadow-md"
-              >
-                {atsLoading ? "Analyzing..." : "📊 Check ATS Score"}
-              </button>
-
+              {/* ATS Score */}
               {atsScore !== null && (
-                <div className="mt-4 bg-gray-50 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-gray-700 font-semibold">ATS Score</span>
-                    <span className={`text-2xl font-bold ${atsScore >= 80 ? "text-green-500" : atsScore >= 60 ? "text-yellow-500" : "text-red-500"}`}>
-                      {atsScore}/100
-                    </span>
+                <div style={{ padding: "32px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, background: "rgba(255,255,255,0.02)" }}>
+                  <div className="section-label" style={{ marginBottom: 20 }}>ATS Score</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 64, fontWeight: 900, letterSpacing: "-3px", color: atsScore >= 80 ? "#34d399" : atsScore >= 60 ? "#fbbf24" : "#f87171", lineHeight: 1 }}>
+                    {atsScore}
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-                    <div
-                      className={`h-3 rounded-full transition-all ${atsScore >= 80 ? "bg-green-500" : atsScore >= 60 ? "bg-yellow-500" : "bg-red-500"}`}
-                      style={{ width: `${atsScore}%` }}
-                    />
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 8 }}>out of 100</div>
+                  <div style={{ marginTop: 20, height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2 }}>
+                    <div style={{ height: "100%", width: `${atsScore}%`, background: atsScore >= 80 ? "#34d399" : atsScore >= 60 ? "#fbbf24" : "#f87171", borderRadius: 2, transition: "width 1s var(--ease)" }} />
                   </div>
-                  {atsTips.length > 0 && (
-                    <div>
-                      <p className="text-gray-600 text-sm font-semibold mb-2">💡 Tips to Improve:</p>
-                      <ul className="space-y-1">
-                        {atsTips.map((tip, i) => (
-                          <li key={i} className="text-gray-600 text-sm flex gap-2">
-                            <span className="text-purple-500">→</span> {tip}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 12, lineHeight: 1.6 }}>
+                    {atsScore >= 80 ? "✓ Excellent — highly likely to pass ATS filters" : atsScore >= 60 ? "⚠ Good — minor improvements recommended" : "✗ Needs work — improve keyword density"}
+                  </div>
                 </div>
               )}
-            </div>
 
-            {saved ? (
-              <div className="text-center text-green-500 font-bold py-3">
-                ✅ Resume saved successfully!
+              {/* Info */}
+              <div style={{ padding: "24px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, background: "rgba(255,255,255,0.02)" }}>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", lineHeight: 1.7 }}>
+                  <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Template</span>
+                    <span style={{ marginLeft: "auto", color: "white", fontWeight: 600 }}>{template}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Language</span>
+                    <span style={{ marginLeft: "auto", color: "white", fontWeight: 600 }}>{language}</span>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <button
-                onClick={saveResume}
-                disabled={saving || regenerating}
-                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white py-3 rounded-full font-bold transition shadow-md"
-              >
-                {saving ? "Saving..." : "💾 Save Resume"}
-              </button>
-            )}
+
+              {/* Next steps */}
+              <div style={{ padding: "24px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, background: "rgba(255,255,255,0.02)" }}>
+                <div className="section-label" style={{ marginBottom: 16 }}>Next Steps</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    ["Review Resume", "/resume-reviewer"],
+                    ["Practice Interview", "/interview"],
+                    ["Study Roadmap", "/interview-tips"],
+                  ].map(([label, href]) => (
+                    <Link key={label} href={href} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "12px 16px", border: "1px solid rgba(255,255,255,0.06)",
+                      borderRadius: 10, textDecoration: "none", color: "rgba(255,255,255,0.5)",
+                      fontSize: 13, transition: "all 0.2s",
+                    }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.2)"; (e.currentTarget as HTMLAnchorElement).style.color = "white"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.06)"; (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.5)"; }}
+                    >
+                      <span>{label}</span><span>→</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-    </main>
+        </section>
+      )}
+
+      {/* Loading overlay */}
+      {loading && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(10px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 24 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(32px,5vw,60px)", fontWeight: 900, letterSpacing: "-2px", color: "white", animation: "pulse 1.5s infinite" }}>
+            Building...
+          </div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.3)" }}>Crafting your perfect resume</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "white", animation: `pulse 1s ${i * 0.2}s infinite` }} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,29 +1,81 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
+function useReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll(".reveal, .letter-reveal");
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => entry.target.classList.add("visible"), i * 60);
+        }
+      });
+    }, { threshold: 0.1 });
+    els.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
 }
 
-export default function InterviewPage() {
+function splitLetters(text: string) {
+  return text.split("").map((char, i) => (
+    <span key={i} style={{ transitionDelay: `${i * 0.03}s` }}>
+      {char === " " ? "\u00A0" : char}
+    </span>
+  ));
+}
+
+type Mode = "text" | "voice" | "video";
+type Message = { role: "ai" | "user"; text: string };
+
+const inputStyle = {
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 12,
+  padding: "14px 18px",
+  color: "white",
+  fontSize: 14,
+  fontFamily: "var(--font-body)",
+  outline: "none",
+  width: "100%",
+  transition: "border-color 0.2s",
+};
+
+const labelStyle = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase" as const,
+  color: "rgba(255,255,255,0.35)",
+  marginBottom: 10,
+  display: "block",
+};
+
+export default function Interview() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mode, setMode] = useState<Mode | null>(null);
   const [role, setRole] = useState("");
-  const [mode, setMode] = useState<"text" | "voice" | "video" | null>(null);
+  const [company, setCompany] = useState("");
+  const [level, setLevel] = useState("Mid");
   const [started, setStarted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [avatarLoading, setAvatarLoading] = useState(false);
-  const [callDuration, setCallDuration] = useState(0);
-  const [micMuted, setMicMuted] = useState(false);
-  const [camOn, setCamOn] = useState(true);
-  const recognitionRef = useRef<any>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<any>(null);
+  const [videoOn, setVideoOn] = useState(false);
+  const [micOn, setMicOn] = useState(true);
+  const [callTime, setCallTime] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useReveal();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,535 +83,371 @@ export default function InterviewPage() {
 
   useEffect(() => {
     if (started && mode === "video") {
-      timerRef.current = setInterval(() => setCallDuration((d) => d + 1), 1000);
-      startCamera();
+      timerRef.current = setInterval(() => setCallTime(t => t + 1), 1000);
     }
-    return () => {
-      clearInterval(timerRef.current);
-      stopCamera();
-    };
-  }, [started]);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [started, mode]);
 
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (err) {
-      console.log("Camera not available");
-    }
-  };
-
-  const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-  };
-
-  const toggleCamera = () => {
-    if (camOn) { stopCamera(); setCamOn(false); }
-    else { startCamera(); setCamOn(true); }
-  };
-
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60).toString().padStart(2, "0");
-    const sec = (s % 60).toString().padStart(2, "0");
-    return `${m}:${sec}`;
-  };
-
-  const speak = (text: string) => {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.pitch = 1;
-    setSpeaking(true);
-    utterance.onend = () => {
-      setSpeaking(false);
-      setAvatarLoading(false);
-    };
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const sendMessage = async (content: string) => {
-    if (!content.trim()) return;
-    const newMessages: Message[] = [...messages, { role: "user", content }];
-    setMessages(newMessages);
-    setInput("");
-    setLoading(true);
-    const res = await fetch("/api/interview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, messages: newMessages }),
-    });
-    const data = await res.json();
-    const aiMessage: Message = { role: "assistant", content: data.result };
-    setMessages([...newMessages, aiMessage]);
-    setLoading(false);
-    if (mode === "voice") speak(data.result);
-    if (mode === "video") {
-      setAvatarLoading(true);
-      speak(data.result);
-    }
-  };
-
-  const startListening = () => {
-    if (micMuted) return;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert("Please use Chrome for voice mode."); return; }
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.onstart = () => setListening(true);
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setListening(false);
-      sendMessage(transcript);
-    };
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  const stopListening = () => {
-    recognitionRef.current?.stop();
-    setListening(false);
-  };
+  const formatTime = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   const startInterview = async () => {
     if (!role || !mode) return;
-    setLoading(true);
-    setMessages([]);
-    const res = await fetch("/api/interview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, messages: [] }),
-    });
-    const data = await res.json();
-    setMessages([{ role: "assistant", content: data.result }]);
     setStarted(true);
-    setLoading(false);
-    if (mode === "voice") speak(data.result);
     if (mode === "video") {
-      setAvatarLoading(true);
-      speak(data.result);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+        setVideoOn(true);
+      } catch {
+        setVideoOn(false);
+      }
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: [], role, company, level, mode }),
+      });
+      const data = await res.json();
+      const aiText = data.message || "Tell me about yourself.";
+      setMessages([{ role: "ai", text: aiText }]);
+      if (mode === "voice" || mode === "video") speak(aiText);
+    } catch {
+      setMessages([{ role: "ai", text: "Hello! Tell me about yourself." }]);
+    }
+    setLoading(false);
+  };
+
+  const speak = (text: string) => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.95;
+      u.pitch = 1;
+      window.speechSynthesis.speak(u);
     }
   };
 
-  const endCall = () => {
-    setStarted(false);
-    setMode(null);
-    setMessages([]);
+  const sendMessage = async (text: string) => {
+    if (!text.trim()) return;
+    const newMessages: Message[] = [...messages, { role: "user", text }];
+    setMessages(newMessages);
     setInput("");
-    setRole("");
-    setCallDuration(0);
-    setAvatarLoading(false);
-    window.speechSynthesis.cancel();
-    clearInterval(timerRef.current);
-    stopCamera();
+    setLoading(true);
+    try {
+      const res = await fetch("/api/interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages, role, company, level, mode }),
+      });
+      const data = await res.json();
+      const aiText = data.message || "Interesting. Tell me more.";
+      setMessages(m => [...m, { role: "ai", text: aiText }]);
+      if (mode === "voice" || mode === "video") speak(aiText);
+    } catch {
+      setMessages(m => [...m, { role: "ai", text: "Please continue." }]);
+    }
+    setLoading(false);
   };
 
-  const AIFace = () => (
-    <div className="relative flex flex-col items-center justify-center flex-1 w-full h-full">
-      {avatarLoading && (
-        <>
-          <div className="absolute w-52 h-52 rounded-full border-2 border-blue-400 opacity-20 animate-ping"></div>
-          <div className="absolute w-44 h-44 rounded-full border-2 border-blue-400 opacity-30 animate-ping" style={{ animationDelay: "0.3s" }}></div>
-        </>
-      )}
-      <div
-        className={`w-36 h-36 rounded-full flex items-center justify-center relative z-10 transition-all duration-300 ${avatarLoading ? "bg-blue-600 scale-110" : "bg-blue-800"}`}
-        style={{ boxShadow: avatarLoading ? "0 0 40px rgba(59,130,246,0.6)" : "none" }}
-      >
-        <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-          <circle cx="40" cy="40" r="38" fill="#1e40af" stroke="#3b82f6" strokeWidth="2"/>
-          <ellipse cx="28" cy="32" rx="5" ry={avatarLoading ? 2 : 5} fill="white"/>
-          <ellipse cx="52" cy="32" rx="5" ry={avatarLoading ? 2 : 5} fill="white"/>
-          <circle cx="28" cy="32" r="2.5" fill="#1e3a8a"/>
-          <circle cx="52" cy="32" r="2.5" fill="#1e3a8a"/>
-          {avatarLoading ? (
-            <ellipse cx="40" cy="54" rx="10" ry="6" fill="white" opacity="0.9"/>
-          ) : loading ? (
-            <ellipse cx="40" cy="54" rx="6" ry="3" fill="white" opacity="0.7"/>
-          ) : (
-            <path d="M 30 52 Q 40 60 50 52" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-          )}
-          {avatarLoading && (
-            <>
-              <line x1="64" y1="44" x2="64" y2="54" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="68" y1="40" x2="68" y2="58" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="72" y1="44" x2="72" y2="54" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round"/>
-            </>
-          )}
-        </svg>
-      </div>
-      <div className="mt-6 text-center z-10">
-        <span className="text-white font-bold text-lg block">AI Interviewer</span>
-        <span className={`text-sm mt-1 block ${avatarLoading ? "text-blue-400" : loading ? "text-yellow-400" : "text-green-400"}`}>
-          {avatarLoading ? "🔊 Speaking..." : loading ? "💭 Thinking..." : "● Online"}
-        </span>
-      </div>
-      {avatarLoading && (
-        <div className="flex gap-1 mt-4 z-10">
-          {[1,2,3,4,5,6,7].map((i) => (
-            <div key={i} className="w-1.5 bg-blue-400 rounded-full animate-bounce"
-              style={{ height: `${8 + (i % 3) * 8}px`, animationDelay: `${i * 0.08}s` }}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  const startVoice = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const recognition = new SR();
+    recognition.lang = "en-US";
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+    recognition.onresult = (e: any) => {
+      const text = e.results[0][0].transcript;
+      sendMessage(text);
+    };
+    recognition.start();
+  };
 
-  // SETUP PAGE
-  if (!started) {
-    return (
-      <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">
-        <nav className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm">
-          <a href="/" className="flex items-center gap-2">
-            <div className="bg-blue-600 text-white font-bold text-lg px-3 py-1 rounded-md">RC</div>
-            <span className="text-xl font-bold text-gray-800">Resume Coach</span>
-          </a>
-          <a href="/" className="text-sm text-gray-500 hover:text-gray-800 transition">← Back to Home</a>
-        </nav>
-
-        <div className="max-w-6xl mx-auto px-8 py-16 flex flex-col md:flex-row items-center gap-12">
-          <div className="flex-1">
-            <div className="inline-block bg-green-100 text-green-700 text-sm font-semibold px-4 py-1 rounded-full mb-6">
-              🎤 AI Mock Interview
-            </div>
-            <h1 className="text-5xl font-extrabold text-gray-900 leading-tight mb-6">
-              Practice Interviews<br />Like a <span className="text-green-600">Pro</span>
-            </h1>
-            <p className="text-gray-500 text-lg mb-8 max-w-md">
-              Choose your preferred mode and practice with a strict AI interviewer!
-            </p>
-            <div className="flex flex-wrap gap-3">
-              {["Real conversation", "Instant feedback", "Role specific", "Build confidence"].map((f) => (
-                <span key={f} className="bg-white border border-gray-200 text-gray-600 text-sm px-4 py-2 rounded-full shadow-sm">{f}</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex-1 flex justify-center">
-            <div className="bg-[#1a2035] rounded-2xl shadow-2xl p-4 w-80 border border-[#2d3748]">
-              <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-white text-xs font-bold">Mock Interview</span>
-                <span className="text-green-400 text-xs">● Live</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="bg-[#2d3748] rounded-xl h-28 flex flex-col items-center justify-center">
-                  <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-2xl mb-1">🧑‍💼</div>
-                  <span className="text-white text-xs">AI Interviewer</span>
-                </div>
-                <div className="bg-[#2d3748] rounded-xl h-28 flex flex-col items-center justify-center">
-                  <span className="text-4xl mb-1">📷</span>
-                  <span className="text-white text-xs">Your Camera</span>
-                </div>
-              </div>
-              <div className="flex justify-center gap-3">
-                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-xs">📵</div>
-                <div className="w-8 h-8 bg-[#3d4f6b] rounded-full flex items-center justify-center text-xs">🎤</div>
-                <div className="w-8 h-8 bg-[#3d4f6b] rounded-full flex items-center justify-center text-xs">📷</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-xl mx-auto px-6 pb-20">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Set Up Your Interview</h2>
-            <input
-              type="text"
-              placeholder="e.g. Software Developer, Data Analyst..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:bg-white transition mb-6"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            />
-            <p className="text-gray-700 font-semibold mb-3">Choose Interview Mode</p>
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <button
-                onClick={() => setMode("text")}
-                className={`p-4 rounded-xl border-2 text-left transition ${mode === "text" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-green-300"}`}
-              >
-                <div className="text-2xl mb-2">⌨️</div>
-                <div className="font-bold text-gray-800 text-sm">Text</div>
-                <div className="text-gray-400 text-xs mt-1">Type answers</div>
-              </button>
-              <button
-                onClick={() => setMode("voice")}
-                className={`p-4 rounded-xl border-2 text-left transition ${mode === "voice" ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-green-300"}`}
-              >
-                <div className="text-2xl mb-2">🎤</div>
-                <div className="font-bold text-gray-800 text-sm">Voice</div>
-                <div className="text-gray-400 text-xs mt-1">Speak answers</div>
-              </button>
-              <button
-                onClick={() => setMode("video")}
-                className={`p-4 rounded-xl border-2 text-left transition ${mode === "video" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}
-              >
-                <div className="text-2xl mb-2">🎥</div>
-                <div className="font-bold text-gray-800 text-sm">Video</div>
-                <div className="text-gray-400 text-xs mt-1">AI face + webcam</div>
-              </button>
-            </div>
-
-            {mode === "video" && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
-                🎥 Video mode shows an animated AI face. Click mic and speak — it auto-sends to AI instantly!
-              </div>
-            )}
-            {mode === "voice" && (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-xs text-green-700">
-                🎤 Voice mode — click mic and speak, your answer auto-sends to AI instantly!
-              </div>
-            )}
-
-            <button
-              onClick={startInterview}
-              disabled={loading || !role || !mode}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 text-white py-4 rounded-full font-bold text-lg transition shadow-lg"
-            >
-              {loading ? "Starting..." : "Start Interview →"}
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
+  const endCall = () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    window.speechSynthesis?.cancel();
+    if (timerRef.current) clearInterval(timerRef.current);
+    setStarted(false);
+    setMessages([]);
+    setMode(null);
+    setCallTime(0);
+    setVideoOn(false);
+  };
 
   // VIDEO CALL UI
-  if (mode === "video") {
+  if (started && mode === "video") {
     return (
-      <div className="h-screen bg-[#0f1726] flex flex-col overflow-hidden">
-        <div className="bg-[#1a2035] px-6 py-3 flex items-center justify-between border-b border-[#2d3748]">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 text-white font-bold text-sm px-2 py-1 rounded-md">RC</div>
-            <span className="text-white font-semibold">Video Interview</span>
-            <span className="text-gray-400 text-sm">— {role}</span>
+      <div style={{ background: "#0a0a0a", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "var(--font-body)", overflow: "hidden" }}>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+
+        <div style={{ padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#34d399", animation: "pulse 2s infinite" }} />
+            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "white" }}>
+              {company ? `${company} Interview` : "Mock Interview"}
+            </span>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.06)", padding: "4px 12px", borderRadius: 100 }}>{formatTime(callTime)}</span>
           </div>
-          <div className="bg-[#2d3748] px-3 py-1 rounded-full text-green-400 text-sm font-mono">
-            ● {formatTime(callDuration)}
+          <div style={{ display: "flex", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.04)", padding: "4px 12px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.08)" }}>{role}</span>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.04)", padding: "4px 12px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.08)" }}>{level}</span>
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 flex flex-col p-4 gap-4">
-            <div className="grid grid-cols-2 gap-4 flex-1">
-
-              {/* AI Animated Face */}
-              <div className={`bg-[#1a2035] rounded-2xl border-2 relative overflow-hidden flex flex-col items-center justify-center ${avatarLoading ? "border-blue-500" : "border-[#2d3748]"}`}>
-                {avatarLoading && <div className="absolute top-0 left-0 right-0 h-1 bg-blue-500 animate-pulse z-10"></div>}
-                <AIFace />
-                <div className="absolute bottom-3 left-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-lg z-10">
-                  {role} Interviewer
+        <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 380px", overflow: "hidden" }}>
+          <div style={{ position: "relative", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+              <div style={{ position: "relative", width: 120, height: 120 }}>
+                <div style={{ width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontFamily: "var(--font-display)", fontSize: 36, fontWeight: 900, color: "rgba(255,255,255,0.6)" }}>AI</span>
                 </div>
-              </div>
-
-              {/* User Webcam */}
-              <div className={`bg-[#1a2035] rounded-2xl border-2 relative overflow-hidden ${listening ? "border-green-500" : "border-[#2d3748]"}`}>
-                {listening && <div className="absolute top-0 left-0 right-0 h-1 bg-green-500 animate-pulse z-10"></div>}
-                {camOn ? (
-                  <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover rounded-2xl"/>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center">
-                    <div className="w-28 h-28 rounded-full bg-gray-700 flex items-center justify-center text-4xl mb-4">👤</div>
-                    <span className="text-gray-400 text-sm">Camera Off</span>
-                  </div>
-                )}
-                <div className="absolute bottom-3 left-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-lg z-10">
-                  You {micMuted ? "🔇" : listening ? "🎤" : ""}
-                </div>
-                {listening && (
-                  <div className="absolute top-3 right-3 z-10 flex gap-1">
-                    {[1,2,3].map((i) => (
-                      <div key={i} className="w-1.5 bg-green-400 rounded-full animate-bounce" style={{ height: `${8 + i * 4}px`, animationDelay: `${i * 0.1}s` }}></div>
-                    ))}
-                  </div>
+                {loading && (
+                  <div style={{ position: "absolute", inset: -8, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.2)", borderTopColor: "white", animation: "spin 1s linear infinite" }} />
                 )}
               </div>
+              <div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, color: "white", textAlign: "center" }}>AI Interviewer</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textAlign: "center", marginTop: 4 }}>{loading ? "Thinking..." : "Listening"}</div>
+              </div>
+              {messages.filter(m => m.role === "ai").slice(-1).map((m, i) => (
+                <div key={i} style={{ maxWidth: 420, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "16px 20px", fontSize: 14, color: "rgba(255,255,255,0.7)", lineHeight: 1.7, textAlign: "center" }}>
+                  {m.text}
+                </div>
+              ))}
             </div>
-
-            {/* Controls */}
-            <div className="bg-[#1a2035] rounded-2xl px-6 py-4 flex items-center justify-between border border-[#2d3748]">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setMicMuted(!micMuted)}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center text-xl transition ${micMuted ? "bg-red-600" : "bg-[#2d3748] hover:bg-[#3d4f6b]"}`}
-                >
-                  {micMuted ? "🔇" : "🎤"}
-                </button>
-                <button
-                  onClick={toggleCamera}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center text-xl transition ${!camOn ? "bg-red-600" : "bg-[#2d3748] hover:bg-[#3d4f6b]"}`}
-                >
-                  {camOn ? "📷" : "🚫"}
-                </button>
-              </div>
-
-              {/* Big mic button - auto sends on stop */}
-              <div className="flex flex-col items-center gap-2">
-                <button
-                  onClick={listening ? stopListening : startListening}
-                  disabled={loading || avatarLoading || micMuted}
-                  className={`w-20 h-20 rounded-full text-3xl transition shadow-lg flex items-center justify-center ${
-                    listening
-                      ? "bg-green-500 animate-pulse ring-4 ring-green-300 ring-opacity-50"
-                      : "bg-[#3d4f6b] hover:bg-[#4a5f80]"
-                  } disabled:opacity-40`}
-                >
-                  {listening ? "⏹" : "🎙️"}
-                </button>
-                <span className="text-gray-400 text-xs">
-                  {listening ? "Listening... tap to stop" : avatarLoading ? "AI speaking..." : loading ? "Processing..." : "Tap to speak"}
-                </span>
-              </div>
-
-              <button
-                onClick={endCall}
-                className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-2xl transition shadow-lg"
-              >
-                📵
-              </button>
+            <div style={{ position: "absolute", bottom: 24, right: 24, width: 160, height: 100, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", background: "#111" }}>
+              {videoOn ? (
+                <video ref={videoRef} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Camera off</span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Chat Sidebar */}
-          <div className="w-80 bg-[#1a2035] border-l border-[#2d3748] flex flex-col">
-            <div className="px-4 py-3 border-b border-[#2d3748]">
-              <h3 className="text-white font-semibold text-sm">💬 Interview Chat</h3>
-              <p className="text-gray-400 text-xs mt-1">{messages.length} messages</p>
+          <div style={{ borderLeft: "1px solid rgba(255,255,255,0.06)", display: "flex", flexDirection: "column", background: "#050505" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "rgba(255,255,255,0.3)" }}>Live Transcript</span>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((msg, i) => (
-                <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                  <span className="text-gray-500 text-xs mb-1">{msg.role === "user" ? "You" : "AI Interviewer"}</span>
-                  <div className={`px-3 py-2 rounded-xl text-xs leading-relaxed max-w-full ${
-                    msg.role === "assistant"
-                      ? "bg-[#2d3748] text-gray-200 rounded-tl-none"
-                      : "bg-blue-600 text-white rounded-tr-none"
-                  }`}>
-                    {msg.content}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {messages.map((m, i) => (
+                <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", gap: 4 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,0.2)", textTransform: "uppercase" as const }}>{m.role === "ai" ? "Interviewer" : "You"}</span>
+                  <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: 12, background: m.role === "ai" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.08)", fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
+                    {m.text}
                   </div>
                 </div>
               ))}
-              {(loading || avatarLoading) && (
-                <div className="flex items-start">
-                  <div className="bg-[#2d3748] rounded-xl rounded-tl-none px-3 py-2">
-                    <div className="flex gap-1">
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                    </div>
-                  </div>
+              {loading && (
+                <div style={{ display: "flex", gap: 4, padding: "10px 14px" }}>
+                  {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,255,255,0.3)", animation: `pulse 1s ${i * 0.2}s infinite` }} />)}
                 </div>
               )}
               <div ref={bottomRef} />
             </div>
+            <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: 10 }}>
+              <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMessage(input)} placeholder="Type your answer..." style={{ ...inputStyle, flex: 1 }} />
+              <button onClick={() => sendMessage(input)} style={{ padding: "12px 16px", background: "white", border: "none", borderRadius: 10, cursor: "pointer", color: "black", fontWeight: 700, fontSize: 14 }}>→</button>
+            </div>
           </div>
+        </div>
+
+        <div style={{ padding: "20px 24px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <button onClick={() => setMicOn(m => !m)} style={{ width: 48, height: 48, borderRadius: "50%", background: micOn ? "rgba(255,255,255,0.08)" : "rgba(239,68,68,0.2)", border: `1px solid ${micOn ? "rgba(255,255,255,0.15)" : "rgba(239,68,68,0.5)"}`, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {micOn ? "🎙️" : "🔇"}
+          </button>
+          <button onClick={() => setVideoOn(v => !v)} style={{ width: 48, height: 48, borderRadius: "50%", background: videoOn ? "rgba(255,255,255,0.08)" : "rgba(239,68,68,0.2)", border: `1px solid ${videoOn ? "rgba(255,255,255,0.15)" : "rgba(239,68,68,0.5)"}`, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {videoOn ? "📹" : "📵"}
+          </button>
+          <button onClick={startVoice} style={{ width: 48, height: 48, borderRadius: "50%", background: listening ? "rgba(59,130,246,0.3)" : "rgba(255,255,255,0.08)", border: `1px solid ${listening ? "rgba(59,130,246,0.6)" : "rgba(255,255,255,0.15)"}`, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            🎤
+          </button>
+          <button onClick={endCall} style={{ padding: "12px 28px", borderRadius: 100, background: "#ef4444", border: "none", cursor: "pointer", color: "white", fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, letterSpacing: "0.05em" }}>
+            End Interview
+          </button>
         </div>
       </div>
     );
   }
 
   // TEXT / VOICE CHAT UI
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">
-      <nav className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm">
-        <a href="/" className="flex items-center gap-2">
-          <div className="bg-blue-600 text-white font-bold text-lg px-3 py-1 rounded-md">RC</div>
-          <span className="text-xl font-bold text-gray-800">Resume Coach</span>
-        </a>
-        <button onClick={endCall} className="text-sm text-red-400 hover:text-red-600 border border-red-200 px-3 py-1 rounded-full transition">
-          End Interview
-        </button>
-      </nav>
+  if (started && (mode === "text" || mode === "voice")) {
+    return (
+      <div style={{ background: "#000", height: "100vh", display: "flex", flexDirection: "column", fontFamily: "var(--font-body)", overflow: "hidden" }}>
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+        <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
 
-      <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col h-[calc(100vh-72px)]">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm">AI</div>
-          <div>
-            <div className="font-bold text-gray-800">AI Interviewer</div>
-            <div className="text-green-500 text-xs">● {role} — {mode === "voice" ? "🎤 Voice Mode" : "⌨️ Text Mode"}</div>
+        <div style={{ position: "relative", zIndex: 1, padding: "20px 40px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <Link href="/" className="rc-nav-logo" style={{ fontSize: 15 }}>Resume Coach</Link>
+            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
+            <span style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
+              {role} {company ? `@ ${company}` : ""} · {level}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.04)", padding: "4px 12px", borderRadius: 100, border: "1px solid rgba(255,255,255,0.08)", textTransform: "capitalize" as const }}>{mode} mode</span>
+            <button onClick={endCall} style={{ padding: "8px 20px", borderRadius: 100, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", cursor: "pointer", color: "#f87171", fontSize: 12, fontWeight: 700 }}>End</button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              {msg.role === "assistant" && (
-                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white text-xs font-bold mr-2 mt-1 flex-shrink-0">AI</div>
-              )}
-              <div className={`max-w-xs md:max-w-md px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                msg.role === "assistant"
-                  ? "bg-white border border-gray-200 text-gray-800 rounded-tl-none shadow-sm"
-                  : "bg-green-600 text-white rounded-tr-none"
-              }`}>
-                {msg.content}
+        <div style={{ position: "relative", zIndex: 1, flex: 1, overflowY: "auto", padding: "32px 40px", display: "flex", flexDirection: "column", gap: 20, maxWidth: 800, margin: "0 auto", width: "100%" }}>
+          {messages.map((m, i) => (
+            <div key={i} style={{ display: "flex", gap: 14, flexDirection: m.role === "user" ? "row-reverse" : "row" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: m.role === "ai" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "white", flexShrink: 0 }}>
+                {m.role === "ai" ? "AI" : "U"}
+              </div>
+              <div style={{ maxWidth: "75%", padding: "16px 20px", borderRadius: 16, background: m.role === "ai" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.08)", fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.75 }}>
+                {m.text}
               </div>
             </div>
           ))}
           {loading && (
-            <div className="flex justify-start">
-              <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white text-xs font-bold mr-2 mt-1">AI</div>
-              <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                </div>
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>AI</div>
+              <div style={{ padding: "16px 20px", borderRadius: 16, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 6, alignItems: "center" }}>
+                {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(255,255,255,0.4)", animation: `pulse 1s ${i * 0.2}s infinite` }} />)}
               </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-          {mode === "voice" ? (
-            <div className="flex items-center gap-4">
-              <button
-                onClick={listening ? stopListening : startListening}
-                disabled={loading || speaking}
-                className={`w-14 h-14 rounded-full text-2xl transition shadow-md flex items-center justify-center flex-shrink-0 ${
-                  listening
-                    ? "bg-red-500 animate-pulse text-white ring-4 ring-red-300 ring-opacity-50"
-                    : "bg-green-500 hover:bg-green-600 text-white"
-                }`}
-              >
-                {listening ? "⏹" : "🎤"}
+        <div style={{ position: "relative", zIndex: 1, padding: "20px 40px", borderTop: "1px solid rgba(255,255,255,0.06)", maxWidth: 800, margin: "0 auto", width: "100%" }}>
+          <div style={{ display: "flex", gap: 12 }}>
+            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !loading && sendMessage(input)} placeholder="Type your answer..." disabled={loading} style={{ ...inputStyle, flex: 1 }} />
+            {mode === "voice" && (
+              <button onClick={startVoice} style={{ width: 48, height: 48, borderRadius: 12, background: listening ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${listening ? "rgba(59,130,246,0.5)" : "rgba(255,255,255,0.1)"}`, cursor: "pointer", fontSize: 18, flexShrink: 0 }}>
+                🎤
               </button>
-              <div className="flex-1">
-                <p className="text-gray-400 text-sm">
-                  {listening ? "🎤 Listening... tap to stop & auto-send" : speaking ? "🔊 AI is speaking..." : loading ? "💭 Processing..." : "Tap mic to speak — auto sends when done!"}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-end gap-3">
-              <textarea
-                rows={2}
-                placeholder="Type your answer... (Enter to send)"
-                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 transition resize-none"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage(input);
-                  }
-                }}
-              />
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={loading || !input}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-200 text-white px-5 py-3 rounded-full font-bold transition shadow-md"
-              >
-                →
-              </button>
-            </div>
-          )}
+            )}
+            <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()} style={{ padding: "0 24px", height: 48, borderRadius: 12, background: "white", border: "none", cursor: "pointer", color: "black", fontWeight: 700, fontSize: 15, flexShrink: 0, opacity: loading || !input.trim() ? 0.4 : 1 }}>→</button>
+          </div>
         </div>
       </div>
-    </main>
+    );
+  }
+
+  // SETUP PAGE
+  return (
+    <div style={{ background: "#000", color: "#fff", minHeight: "100vh", fontFamily: "var(--font-body)" }}>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)", backgroundSize: "64px 64px" }} />
+      <div style={{ position: "fixed", top: "30%", left: "5%", width: 350, height: 350, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%)", filter: "blur(40px)", pointerEvents: "none", zIndex: 0 }} />
+
+      <nav className={`rc-nav ${scrolled ? "scrolled" : ""}`} style={{ zIndex: 100 }}>
+        <Link href="/" className="rc-nav-logo">Resume Coach</Link>
+        <div className="rc-nav-links">
+          <Link href="/resume-builder" className="rc-nav-link">Resume Builder</Link>
+          <Link href="/interview" className="rc-nav-link" style={{ color: "white" }}>Mock Interview</Link>
+          <Link href="/resume-reviewer" className="rc-nav-link">Reviewer</Link>
+          <Link href="/interview-tips" className="rc-nav-link">Tips</Link>
+        </div>
+      </nav>
+
+      <section style={{ position: "relative", zIndex: 1, padding: "160px 48px 80px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div className="section-label reveal" style={{ marginBottom: 24 }}>AI Mock Interview</div>
+          <h1 className="letter-reveal" style={{ fontFamily: "var(--font-display)", fontSize: "clamp(48px,8vw,100px)", fontWeight: 900, letterSpacing: "-4px", lineHeight: 0.95, marginBottom: 32 }}>
+            {splitLetters("Practice until")}
+            <br />
+            {splitLetters("perfect.")}
+          </h1>
+          <p className="reveal" style={{ fontSize: 17, color: "rgba(255,255,255,0.4)", maxWidth: 480, lineHeight: 1.75 }}>
+            A strict AI interviewer that challenges you — text, voice, or full video call mode.
+          </p>
+        </div>
+      </section>
+
+      <div className="rc-divider" style={{ position: "relative", zIndex: 1 }} />
+
+      <section style={{ position: "relative", zIndex: 1, padding: "64px 48px", maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64 }}>
+
+          <div className="reveal" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+            <div className="section-label" style={{ marginBottom: 8 }}>Setup</div>
+
+            <div>
+              <label style={labelStyle}>Target Role *</label>
+              <input value={role} onChange={e => setRole(e.target.value)} placeholder="Software Engineer, PM, Data Analyst..." style={inputStyle}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.4)"}
+                onBlur={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.1)"} />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Company (optional)</label>
+              <input value={company} onChange={e => setCompany(e.target.value)} placeholder="Google, Amazon, Startup..." style={inputStyle}
+                onFocus={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.4)"}
+                onBlur={e => (e.target as HTMLInputElement).style.borderColor = "rgba(255,255,255,0.1)"} />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Experience Level</label>
+              <div style={{ display: "flex", gap: 2 }}>
+                {["Junior", "Mid", "Senior"].map(l => (
+                  <button key={l} onClick={() => setLevel(l)} style={{ flex: 1, padding: "12px 0", border: "1px solid", borderColor: level === l ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.08)", background: level === l ? "rgba(255,255,255,0.08)" : "transparent", color: level === l ? "white" : "rgba(255,255,255,0.35)", fontSize: 13, fontWeight: 600, borderRadius: 10, cursor: "pointer", transition: "all 0.2s" }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="reveal" style={{ transitionDelay: "0.1s" }}>
+            <div className="section-label" style={{ marginBottom: 24 }}>Interview Mode</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[
+                { id: "text" as Mode, icon: "💬", title: "Text Mode", desc: "Type your answers — best for practicing phrasing and structure." },
+                { id: "voice" as Mode, icon: "🎙️", title: "Voice Mode", desc: "Speak your answers aloud — AI speaks questions back to you." },
+                { id: "video" as Mode, icon: "📹", title: "Video Mode", desc: "Full video call simulation — camera + mic + live transcript." },
+              ].map(m => (
+                <div key={m.id} onClick={() => setMode(m.id)} style={{ padding: "24px", border: "1px solid", borderColor: mode === m.id ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.06)", background: mode === m.id ? "rgba(255,255,255,0.05)" : "transparent", borderRadius: 16, cursor: "pointer", transition: "all 0.25s", display: "flex", gap: 20, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 28, lineHeight: 1 }}>{m.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color: mode === m.id ? "white" : "rgba(255,255,255,0.6)", marginBottom: 6 }}>{m.title}</div>
+                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>{m.desc}</div>
+                  </div>
+                  {mode === m.id && <div style={{ width: 20, height: 20, borderRadius: "50%", background: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "black", fontWeight: 900, flexShrink: 0 }}>✓</div>}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 32 }}>
+              <button onClick={startInterview} disabled={!role || !mode} className="mag-btn mag-btn-filled" style={{ width: "100%", justifyContent: "center", opacity: !role || !mode ? 0.4 : 1 }}>
+                <span>Start Interview</span><span>→</span>
+              </button>
+              {(!role || !mode) && <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 10, textAlign: "center" }}>Enter your role and select a mode to begin</p>}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="rc-divider" style={{ position: "relative", zIndex: 1 }} />
+
+      <section style={{ position: "relative", zIndex: 1, padding: "64px 48px", maxWidth: 1200, margin: "0 auto" }}>
+        <div className="section-label reveal" style={{ marginBottom: 32 }}>Tips</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 2 }}>
+          {[
+            { n: "01", tip: "Use the STAR method — Situation, Task, Action, Result." },
+            { n: "02", tip: "Keep answers to 2 minutes. Be concise and specific." },
+            { n: "03", tip: "Research the company before starting video mode." },
+            { n: "04", tip: "Practice voice mode daily to build confidence." },
+          ].map((t, i) => (
+            <div key={t.n} className="reveal" style={{ padding: "28px 24px", border: "1px solid rgba(255,255,255,0.06)", borderRight: i < 3 ? "none" : "1px solid rgba(255,255,255,0.06)", transitionDelay: `${i * 0.1}s` }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em", marginBottom: 16 }}>{t.n}</div>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.7 }}>{t.tip}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
